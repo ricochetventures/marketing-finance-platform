@@ -1,0 +1,61 @@
+# Core Data Science
+pandas
+numpy
+scipy
+scikit-learn
+
+# Machine Learning
+lightgbm
+xgboost
+catboost
+tensorflow
+torch
+
+# Time Series
+prophet
+statsmodels
+pmdarima
+
+# Visualization
+plotly
+seaborn
+matplotlib
+dash
+
+# Web Framework
+fastapi
+uvicorn
+streamlit
+gradio
+
+# Database
+sqlalchemy
+psycopg2-binary
+redis
+pymongo
+
+# Data Sources
+yfinance
+alpha-vantage
+fredapi
+sec-edgar-downloader
+
+# API & Web
+requests
+beautifulsoup4
+selenium
+aiohttp
+
+# Utils
+python-dotenv
+pydantic
+pytest
+black
+jupyter
+tqdm
+joblib
+optuna
+mlflow
+wandb
+shap
+lime

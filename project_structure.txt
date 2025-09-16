@@ -1,0 +1,28 @@
+marketing-finance-platform/
+├── data/
+│   ├── raw/              # Original data files
+│   ├── processed/         # Cleaned data
+│   └── external/          # API data cache
+├── models/
+│   ├── saved/            # Trained models
+│   └── configs/          # Model configurations
+├── src/
+│   ├── data/             # Data loading/processing
+│   ├── features/         # Feature engineering
+│   ├── models/           # ML models
+│   ├── visualization/    # Plotting functions
+│   ├── api/              # API endpoints
+│   └── utils/            # Utility functions
+├── notebooks/            # Jupyter notebooks
+├── tests/               # Unit tests
+├── deployment/          # Docker, K8s configs
+├── frontend/            # Web interface
+│   ├── static/
+│   └── templates/
+├── configs/             # Configuration files
+├── logs/                # Application logs
+├── scripts/             # Utility scripts
+├── requirements.txt
+├── setup.py
+├── README.md
+└── .env.example
