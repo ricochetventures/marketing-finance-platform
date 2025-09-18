@@ -6,6 +6,7 @@ import lightgbm as lgb
 import xgboost as xgb
 from sklearn.ensemble import RandomForestRegressor
 import joblib
+from pathlib import Path
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -20,11 +21,16 @@ class MarketingFinanceMLPipeline:
         """Create ML features for a specific company"""
         features = pd.DataFrame()
         
-        # Get company data
-        company_stock = self.data['stock_prices'][company_name] if company_name in self.data['stock_prices'].columns else None
-        company_spend = self.data['ad_spend'][self.data['ad_spend']['Company'] == company_name]
-        company_agencies = self.data['agencies'][self.data['agencies']['Company'] == company_name]
-        company_roi = self.data['roi'][self.data['roi']['Company'] == company_name]
+        # UPDATE THIS SECTION - Handle the year-based data structure
+        if 'stock_prices' in self.data and company_name in self.data['stock_prices'].columns:
+            company_stock = self.data['stock_prices'][company_name].dropna()
+            
+            # Since we have yearly data, adjust the features
+            features['returns_1y'] = company_stock.pct_change(1)  # CHANGED from 7d to 1y
+            features['returns_2y'] = company_stock.pct_change(2)  # CHANGED from 30d to 2y
+            features['volatility'] = company_stock.rolling(window=3, min_periods=1).std()  # CHANGED window
+            features['price_ma_3y'] = company_stock.rolling(window=3, min_periods=1).mean()  # CHANGED from 50 to 3
+            features['price_ma_5y'] = company_stock.rolling(window=5, min_periods=1).mean()  # CHANGED from 200 to 5
         
         if company_stock is not None:
             # Stock features
@@ -35,16 +41,20 @@ class MarketingFinanceMLPipeline:
             features['price_ma_200'] = company_stock.rolling(200).mean()
             
         # Ad spend features
-        if not company_spend.empty:
-            spend_by_year = company_spend.groupby('Year').agg({
-                'Total_Spend': 'sum',
-                'Digital_Spend': 'sum',
-                'TV_Spend': 'sum'
-            })
-            features['total_spend'] = spend_by_year['Total_Spend']
-            features['digital_ratio'] = spend_by_year['Digital_Spend'] / spend_by_year['Total_Spend']
-            features['tv_ratio'] = spend_by_year['TV_Spend'] / spend_by_year['Total_Spend']
-            features['spend_growth'] = spend_by_year['Total_Spend'].pct_change()
+        if 'ad_spend' in self.data:
+            company_spend = self.data['ad_spend'][self.data['ad_spend']['Company'] == company_name]
+            if not company_spend.empty:
+                # CHANGE: Year column might be datetime now
+                if 'Year' in company_spend.columns:
+                    spend_by_year = company_spend.groupby(pd.Grouper(key='Year', freq='Y')).agg({
+                        'Total_Spend': 'sum',
+                        'Digital_Spend': 'sum',
+                        'TV_Spend': 'sum'
+                    })
+                    features['total_spend'] = spend_by_year['Total_Spend']
+                    features['digital_ratio'] = spend_by_year['Digital_Spend'] / spend_by_year['Total_Spend'].replace(0, 1)
+                    features['tv_ratio'] = spend_by_year['TV_Spend'] / spend_by_year['Total_Spend'].replace(0, 1)
+                    features['spend_growth'] = spend_by_year['Total_Spend'].pct_change()
             
         # Agency features
         if not company_agencies.empty:
@@ -56,6 +66,10 @@ class MarketingFinanceMLPipeline:
             roi_series = company_roi.set_index('Date')['ROI']
             features['avg_roi'] = roi_series.rolling(4).mean()
             features['roi_trend'] = roi_series.pct_change()
+        
+        # ADD: Clean the features
+        features = features.replace([np.inf, -np.inf], np.nan)
+        features = features.fillna(method='ffill').fillna(0)
             
         return features
     
@@ -66,20 +80,24 @@ class MarketingFinanceMLPipeline:
         
         for company in self.data['companies']:
             features = self.create_features(company)
-            if not features.empty:
-                # Create targets (future ROI and stock returns)
-                if company in self.data['stock_prices'].columns:
-                    future_returns = self.data['stock_prices'][company].pct_change(90).shift(-90)
-                    
-                    # Align features and targets
-                    aligned_features = features.loc[future_returns.index]
-                    aligned_targets = future_returns.loc[features.index]
+            if not features.empty and company in self.data['stock_prices'].columns:
+                company_stock = self.data['stock_prices'][company].dropna()
+                
+                # CHANGE: Adjust for yearly data - predict 1 year ahead instead of 90 days
+                future_returns = company_stock.pct_change(1).shift(-1)  # CHANGED from 90 days to 1 year
+                
+                # Align features and targets
+                common_index = features.index.intersection(future_returns.index)
+                if len(common_index) > 0:
+                    aligned_features = features.loc[common_index]
+                    aligned_targets = future_returns.loc[common_index]
                     
                     # Remove NaN values
                     mask = ~(aligned_features.isna().any(axis=1) | aligned_targets.isna())
                     
-                    all_features.append(aligned_features[mask])
-                    all_targets.append(aligned_targets[mask])
+                    if mask.any():
+                        all_features.append(aligned_features[mask])
+                        all_targets.append(aligned_targets[mask])
         
         if all_features:
             X = pd.concat(all_features)
@@ -167,14 +185,25 @@ class MarketingFinanceMLPipeline:
         if 'new_spend' in scenario:
             features['total_spend'] = scenario['new_spend']
         if 'new_agency' in scenario:
-            features['agency_changes'] += 1
+            features['agency_changes'] = features.get('agency_changes', 0) + 1  # ADDED get() for safety
             features['current_agency_tenure'] = 0
         
-        # Get latest features
-        latest_features = features.iloc[-1:][self.feature_columns]
+        # Get latest features - ADDED error handling
+        if self.feature_columns:
+            # Only use columns that exist in both features and feature_columns
+            available_cols = [col for col in self.feature_columns if col in features.columns]
+            if available_cols:
+                latest_features = features[available_cols].iloc[-1:].fillna(0)
+            else:
+                return None
+        else:
+            latest_features = features.iloc[-1:].fillna(0)
         
         # Scale features
-        features_scaled = self.scalers['standard'].transform(latest_features)
+        if 'standard' in self.scalers:
+            features_scaled = self.scalers['standard'].transform(latest_features)
+        else:
+            features_scaled = latest_features.values
         
         # Ensemble prediction
         predictions = []
@@ -189,5 +218,5 @@ class MarketingFinanceMLPipeline:
         }
 
 # Train the models
-pipeline = MarketingFinanceMLPipeline(data)
-pipeline.train_models()
+# pipeline = MarketingFinanceMLPipeline(data)
+# pipeline.train_models()
