@@ -14,7 +14,7 @@ class MarketingCausalInference:
         self.treatment_effects = None
         self.confidence_intervals = None
         
-    def estimate_agency_change_impact(self, 
+    def estimate_agency_change_impact(self,
                                      data: pd.DataFrame,
                                      treatment_col: str = 'agency_change',
                                      outcome_col: str = 'roi',
@@ -22,7 +22,7 @@ class MarketingCausalInference:
         """Estimate causal impact of agency changes"""
         
         if confounders is None:
-            confounders = ['company_size', 'industry', 'past_performance', 
+            confounders = ['company_size', 'industry', 'past_performance',
                           'market_conditions', 'competitor_spend']
         
         # Prepare data
@@ -117,7 +117,7 @@ class MarketingCausalInference:
             'current_efficiency': self._calculate_efficiency(data, elasticity)
         }
     
-    def _analyze_heterogeneous_effects(self, X: np.ndarray, 
+    def _analyze_heterogeneous_effects(self, X: np.ndarray,
                                       feature_names: List[str]) -> Dict:
         """Analyze how treatment effects vary by characteristics"""
         

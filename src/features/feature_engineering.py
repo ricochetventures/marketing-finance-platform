@@ -46,7 +46,7 @@ class FeatureEngineer:
         
         return features
     
-    def create_marketing_features(self, ad_spend: pd.DataFrame, 
+    def create_marketing_features(self, ad_spend: pd.DataFrame,
                                  agencies: pd.DataFrame) -> pd.DataFrame:
         """Create marketing-specific features"""
         features = pd.DataFrame()
@@ -76,7 +76,7 @@ class FeatureEngineer:
         
         return features
     
-    def create_interaction_features(self, financial: pd.DataFrame, 
+    def create_interaction_features(self, financial: pd.DataFrame,
                                    marketing: pd.DataFrame,
                                    economic: pd.DataFrame) -> pd.DataFrame:
         """Create interaction features between different data sources"""
@@ -109,7 +109,7 @@ class FeatureEngineer:
         
         return features
     
-    def create_industry_features(self, company_data: pd.DataFrame, 
+    def create_industry_features(self, company_data: pd.DataFrame,
                                 industry_data: pd.DataFrame) -> pd.DataFrame:
         """Create industry-relative performance features"""
         features = pd.DataFrame()
@@ -178,19 +178,19 @@ class FeatureEngineer:
         signal = macd.ewm(span=9, adjust=False).mean()
         return macd, signal
     
-    def _parkinson_volatility(self, high: pd.Series, low: pd.Series, 
+    def _parkinson_volatility(self, high: pd.Series, low: pd.Series,
                              period: int = 20) -> pd.Series:
         """Calculate Parkinson volatility estimator"""
         return np.sqrt(
             np.log(high/low)**2 / (4*np.log(2))
         ).rolling(period).mean()
     
-    def _garman_klass_volatility(self, open_: pd.Series, high: pd.Series, 
+    def _garman_klass_volatility(self, open_: pd.Series, high: pd.Series,
                                  low: pd.Series, close: pd.Series,
                                  period: int = 20) -> pd.Series:
         """Calculate Garman-Klass volatility estimator"""
         return np.sqrt(
-            0.5 * np.log(high/low)**2 - 
+            0.5 * np.log(high/low)**2 -
             (2*np.log(2) - 1) * np.log(close/open_)**2
         ).rolling(period).mean()
     

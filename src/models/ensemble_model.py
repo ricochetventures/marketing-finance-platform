@@ -69,7 +69,7 @@ class AdvancedEnsembleModel(MarketingFinancePredictor):
             
             model = lgb.LGBMRegressor(**params, random_state=42, verbosity=-1)
             tscv = TimeSeriesSplit(n_splits=3)
-            scores = cross_val_score(model, X, y, cv=tscv, 
+            scores = cross_val_score(model, X, y, cv=tscv,
                                     scoring='neg_mean_squared_error')
             return -scores.mean()
         
@@ -86,7 +86,7 @@ class AdvancedEnsembleModel(MarketingFinancePredictor):
             
             model = xgb.XGBRegressor(**params, random_state=42, verbosity=0)
             tscv = TimeSeriesSplit(n_splits=3)
-            scores = cross_val_score(model, X, y, cv=tscv, 
+            scores = cross_val_score(model, X, y, cv=tscv,
                                     scoring='neg_mean_squared_error')
             return -scores.mean()
         

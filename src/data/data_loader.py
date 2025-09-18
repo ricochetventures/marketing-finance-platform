@@ -96,7 +96,7 @@ class MarketingFinanceDataLoader:
         competitor_data = {}
         
         with ThreadPoolExecutor(max_workers=5) as executor:
-            futures = {executor.submit(self._fetch_company_data, company): company 
+            futures = {executor.submit(self._fetch_company_data, company): company
                       for company in companies}
             
             for future in futures:

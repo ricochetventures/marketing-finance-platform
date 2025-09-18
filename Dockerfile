@@ -20,12 +20,19 @@ COPY src/ ./src/
 COPY data/ ./data/
 COPY models/ ./models/
 COPY configs/ ./configs/
+COPY frontend/ ./frontend/
 
 # Create necessary directories
-RUN mkdir -p logs data/external models/saved
+RUN mkdir -p logs data/external models/saved data/processed
 
-# Expose API port
-EXPOSE 8000
+# Expose both API and Streamlit ports
+EXPOSE 8000 8501
 
-# Start API server
-CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Create a startup script
+RUN echo '#!/bin/bash\n\
+python -m uvicorn src.api.app:app --host 0.0.0.0 --port 8000 --reload &\n\
+streamlit run frontend/streamlit_app.py --server.port 8501 --server.address 0.0.0.0\n\
+' > /app/start.sh && chmod +x /app/start.sh
+
+# Start both services
+CMD ["/app/start.sh"]

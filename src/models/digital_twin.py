@@ -21,7 +21,7 @@ class CompanyState:
 class MarketingDigitalTwin:
     """Digital twin for marketing-finance simulation"""
     
-    def __init__(self, company_data: pd.DataFrame, 
+    def __init__(self, company_data: pd.DataFrame,
                  market_data: pd.DataFrame,
                  ml_models: Dict):
         self.company_data = company_data
@@ -50,7 +50,7 @@ class MarketingDigitalTwin:
         
         return self.current_state
     
-    def simulate_scenario(self, 
+    def simulate_scenario(self,
                          scenario: Dict,
                          time_horizon: int = 12,
                          num_simulations: int = 1000) -> Dict:
@@ -88,7 +88,7 @@ class MarketingDigitalTwin:
         
         return results
     
-    def _run_single_simulation(self, 
+    def _run_single_simulation(self,
                                initial_state: CompanyState,
                                scenario: Dict,
                                time_horizon: int) -> Dict:
@@ -145,7 +145,7 @@ class MarketingDigitalTwin:
             'market_share': final_results['market_share'].iloc[-1]
         }
     
-    def _simulate_agency_change(self, state: CompanyState, 
+    def _simulate_agency_change(self, state: CompanyState,
                                 new_agency: str) -> CompanyState:
         """Simulate the impact of changing agencies"""
         
@@ -188,7 +188,7 @@ class MarketingDigitalTwin:
         
         return features
     
-    def optimize_marketing_mix(self, 
+    def optimize_marketing_mix(self,
                                constraints: Dict,
                                objective: str = 'roi') -> Dict:
         """Optimize marketing mix using simulation"""
