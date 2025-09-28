@@ -1,4 +1,5 @@
 #!/bin/bash
+export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 
 echo "🚀 Starting Marketing-Finance Platform..."
 

@@ -39,7 +39,7 @@ API_URL = "http://localhost:8000"
 
 # Sidebar
 with st.sidebar:
-    st.image("logo.png", width=200)
+    # st.image("logo.png", width=200)
     st.title("🎯 Marketing-Finance AI")
     
     # Navigation
