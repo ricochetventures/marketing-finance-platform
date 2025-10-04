@@ -1,3 +1,5 @@
+# /frontend/templates/app.py
+
 import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
@@ -39,7 +41,7 @@ API_URL = "http://localhost:8000"
 
 # Sidebar
 with st.sidebar:
-    # st.image("logo.png", width=200)
+    st.image("logo.png", width=200)
     st.title("🎯 Marketing-Finance AI")
     
     # Navigation

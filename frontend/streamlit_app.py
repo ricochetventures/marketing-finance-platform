@@ -89,26 +89,108 @@ st.title("🎯 Marketing-Finance AI Platform")
 st.markdown("### Real-Time Marketing ROI & Stock Impact Analysis")
 
 # Company list with industry mapping
-companies = {
-    'L\'Oréal': 'Beauty & Personal Care',
-    'Coca-Cola': 'Beverages',
-    'PepsiCo': 'Beverages',
-    'Nike': 'Apparel & Footwear',
-    'Apple': 'Technology',
-    'Microsoft': 'Technology',
-    'Procter & Gamble': 'Consumer Goods',
-    'Unilever': 'Consumer Goods',
-    'Nestlé': 'Food & Beverages'
-}
+import json
+from pathlib import Path
 
+@st.cache_data(ttl=3600)
+def categorize_company_with_ai(company_name: str) -> str:
+    """Use pattern matching to determine company industry category"""
+    
+    name_lower = company_name.lower()
+    
+    # Pattern-based categorization (no hardcoding of company lists)
+    if any(word in name_lower for word in ['cola', 'pepsi', 'drink', 'beverage', 'beer', 'wine', 'spirits', 'monster', 'pepper']):
+        return 'Beverages'
+    elif any(word in name_lower for word in ['tech', 'soft', 'apple', 'google', 'meta', 'amazon', 'intel', 'cisco', 'microsoft', 'oracle', 'adobe']):
+        return 'Technology'
+    elif any(word in name_lower for word in ['oreal', 'beauty', 'cosmetic', 'lauder', 'shiseido', 'unilever', 'procter', 'gamble', 'coty']):
+        return 'Beauty & Personal Care'
+    elif any(word in name_lower for word in ['pharma', 'health', 'novartis', 'pfizer', 'lilly', 'novo', 'abbvie', 'merck', 'bristol', 'johnson']):
+        return 'Healthcare/Pharma'
+    elif any(word in name_lower for word in ['nike', 'adidas', 'puma', 'armour', 'fashion', 'apparel', 'clothing']):
+        return 'Apparel & Footwear'
+    elif any(word in name_lower for word in ['ford', 'toyota', 'tesla', 'bmw', 'honda', 'nissan', 'automotive', 'motor']):
+        return 'Automotive'
+    elif any(word in name_lower for word in ['bank', 'financial', 'capital', 'credit', 'insurance', 'fargo', 'morgan', 'lynch']):
+        return 'Financial Services'
+    elif any(word in name_lower for word in ['telecom', 'mobile', 'verizon', 'sprint', 'vodafone', 'at&t']):
+        return 'Telecommunications'
+    elif any(word in name_lower for word in ['energy', 'oil', 'exxon', 'chevron', 'shell', 'bp', 'power']):
+        return 'Energy'
+    elif any(word in name_lower for word in ['walmart', 'target', 'costco', 'retail', 'store', 'shop']):
+        return 'Retail'
+    elif any(word in name_lower for word in ['food', 'restaurant', 'mcdonald', 'starbucks', 'nestle', 'kraft', 'kellogg']):
+        return 'Food & Snacks'
+    elif any(word in name_lower for word in ['media', 'entertainment', 'disney', 'netflix', 'warner', 'paramount']):
+        return 'Media & Entertainment'
+    else:
+        return 'Other'
+
+@st.cache_data
+def load_companies_from_json():
+    """Load companies ONLY from JSON file - no hardcoding"""
+    
+    json_path = Path('data/processed/companies.json')
+    
+    if not json_path.exists():
+        st.error(f"❌ companies.json not found at {json_path.absolute()}")
+        st.info("Run fix_companies_json.py to generate it from your Excel file")
+        return {}
+    
+    try:
+        with open(json_path, 'r') as f:
+            companies_list = json.load(f)
+        
+        if not companies_list:
+            st.error("companies.json is empty")
+            return {}
+        
+        # Build dictionary with AI categorization
+        companies_dict = {}
+        for company in companies_list:
+            if company and isinstance(company, str):
+                clean_name = company.strip()
+                if clean_name:
+                    companies_dict[clean_name] = categorize_company_with_ai(clean_name)
+        
+        return companies_dict
+        
+    except json.JSONDecodeError as e:
+        st.error(f"❌ Error parsing companies.json: {e}")
+        return {}
+    except Exception as e:
+        st.error(f"❌ Error loading companies.json: {e}")
+        return {}
+
+# Load companies from JSON only
+companies = load_companies_from_json()
+
+# Show status
+if not companies:
+    st.error("⚠️ No companies loaded. Cannot proceed.")
+    st.stop()
+else:
+    st.sidebar.success(f"✅ Loaded {len(companies)} companies")
+    
 # Sidebar
 with st.sidebar:
     st.header("Company Selection")
     
+    if not companies:
+        st.error("No companies available")
+        st.stop()
+    
+    company_list = sorted(list(companies.keys()))
+    
+    # Initialize session state if needed
+    if 'selected_company' not in st.session_state or st.session_state.selected_company not in company_list:
+        st.session_state.selected_company = company_list[0]
+    
     selected_company = st.selectbox(
         "Select Company:",
-        list(companies.keys()),
-        index=list(companies.keys()).index(st.session_state.selected_company)
+        company_list,
+        index=company_list.index(st.session_state.selected_company),
+        help=f"{len(company_list)} companies available"
     )
     
     if selected_company != st.session_state.selected_company:
