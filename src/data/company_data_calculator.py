@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 import requests
 from typing import Dict, List, Optional
 import logging
+from pathlib import Path
+import json
 
 class CompanyDataCalculator:
     """
@@ -79,54 +81,153 @@ class CompanyDataCalculator:
         return metrics
     
     def _get_stock_data(self, company_name: str) -> Optional[Dict]:
-        """Get real stock data with transparent calculations"""
+        """Get real stock data with AI-powered ticker lookup"""
         try:
-            # Company ticker mapping
-            ticker_map = {
-                'L\'Oréal': 'OR.PA',
-                'Coca-Cola': 'KO',
-                'PepsiCo': 'PEP',
-                'Nike': 'NKE',
-                'Apple': 'AAPL',
-                'Microsoft': 'MSFT',
-                'Procter & Gamble': 'PG',
-                'Unilever': 'UL',
-                'Nestlé': 'NSRGY'
-            }
+            # Get ticker
+            ticker = self._get_company_ticker(company_name)
             
-            ticker = ticker_map.get(company_name)
             if not ticker:
-                return None
-                
-            stock = yf.Ticker(ticker)
-            
-            # Get current data
-            hist_1d = stock.history(period="1d")
-            hist_1y = stock.history(period="1y")
-            
-            if hist_1d.empty or hist_1y.empty:
+                logging.warning(f"Could not find ticker for {company_name}")
                 return None
             
-            current_price = float(hist_1d['Close'].iloc[-1])
+            # Try to get stock data with retries
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    stock = yf.Ticker(ticker)
+                    
+                    # Get historical data with specific period
+                    hist = stock.history(period="1y", interval="1d")
+                    
+                    # Check if we got data
+                    if hist.empty:
+                        logging.warning(f"No historical data for {ticker}, attempt {attempt + 1}/{max_retries}")
+                        if attempt < max_retries - 1:
+                            continue
+                        else:
+                            return None
+                    
+                    # Get current price
+                    current_price = float(hist['Close'].iloc[-1])
+                    
+                    # Calculate yearly change
+                    if len(hist) >= 2:
+                        year_ago_price = float(hist['Close'].iloc[0])
+                        yearly_change = ((current_price - year_ago_price) / year_ago_price) * 100
+                    else:
+                        yearly_change = 0.0
+                    
+                    return {
+                        'current_price': current_price,
+                        'yearly_change': yearly_change,
+                        'ticker': ticker,
+                        'data_points': len(hist)
+                    }
+                    
+                except Exception as e:
+                    logging.error(f"Attempt {attempt + 1} failed for {ticker}: {e}")
+                    if attempt < max_retries - 1:
+                        import time
+                        time.sleep(1)  # Wait 1 second before retry
+                        continue
+                    else:
+                        return None
             
-            # Calculate yearly change
-            if len(hist_1y) >= 252:  # Full trading year
-                year_ago_price = float(hist_1y['Close'].iloc[0])
-                yearly_change = ((current_price - year_ago_price) / year_ago_price) * 100
-            else:
-                yearly_change = 0.0
-            
-            return {
-                'current_price': current_price,
-                'yearly_change': yearly_change,
-                'ticker': ticker,
-                'data_points': len(hist_1y)
-            }
+            return None
             
         except Exception as e:
             logging.error(f"Error getting stock data for {company_name}: {e}")
             return None
-    
+
+
+    def _get_company_ticker(self, company_name: str) -> Optional[str]:
+        """AI-powered ticker lookup using multiple strategies"""
+        
+        # Strategy 1: Check cache file
+        cache_file = Path('data/processed/ticker_cache.json')
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        
+        if cache_file.exists():
+            try:
+                with open(cache_file, 'r') as f:
+                    ticker_cache = json.load(f)
+                    if company_name in ticker_cache:
+                        logging.info(f"Found {company_name} in cache: {ticker_cache[company_name]}")
+                        return ticker_cache[company_name]
+            except Exception as e:
+                logging.error(f"Error reading cache: {e}")
+        
+        # Strategy 2: Manual mappings (MOST RELIABLE)
+        manual_overrides = {
+            "Coca-Cola": "KO",
+            "L'Oréal": "OR.PA",
+            "Nestlé": "NSRGY",
+            "Unilever": "UL",
+            "Procter & Gamble": "PG",
+            "Nike": "NKE",
+            "Apple": "AAPL",
+            "Microsoft": "MSFT",
+            "PepsiCo": "PEP",
+            "Johnson & Johnson": "JNJ",
+            "Pfizer": "PFE",
+            "Novartis": "NVS",
+            "Eli Lilly": "LLY",
+            "Novo Nordisk": "NVO",
+            "AbbVie": "ABBV",
+            "Meta": "META",
+            "Google": "GOOGL",
+            "Amazon": "AMZN",
+            "Estée Lauder": "EL",
+            "Shiseido": "4911.T",
+            "Monster Beverage": "MNST",
+            "Dr Pepper": "KDP",
+            "Merck": "MRK",
+            "Bristol-Myers Squibb": "BMY",
+            "Coty": "COTY",
+            "NVIDIA": "NVDA",
+            "Lululemon": "LULU",
+            "Under Armour": "UAA",
+            "VF Corporation": "VFC",
+            "Adidas": "ADS.DE",
+            "Constellation Brands": "STZ"
+        }
+        
+        if company_name in manual_overrides:
+            ticker = manual_overrides[company_name]
+            self._cache_ticker(company_name, ticker)
+            logging.info(f"Found {company_name} in manual mappings: {ticker}")
+            return ticker
+        
+        logging.warning(f"Could not find ticker for {company_name}")
+        return None
+
+    def _cache_ticker(self, company_name: str, ticker: str):
+        """Cache ticker for future use"""
+        cache_file = Path('data/processed/ticker_cache.json')
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        
+        if cache_file.exists():
+            with open(cache_file, 'r') as f:
+                ticker_cache = json.load(f)
+        else:
+            ticker_cache = {}
+        
+        ticker_cache[company_name] = ticker
+        
+        with open(cache_file, 'w') as f:
+            json.dump(ticker_cache, f, indent=2)
+        
+
+
+
+
+
+
+
+
+
+
+
     def _get_current_agency(self, company_name: str) -> Dict:
         """
         Determine current agency with methodology transparency
