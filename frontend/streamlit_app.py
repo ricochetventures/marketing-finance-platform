@@ -260,52 +260,27 @@ tab1, tab2, tab3, tab4 = st.tabs([
 with tab1:
     st.header(f"Executive Dashboard - {selected_company}")
     
-    # Show calculation transparency if requested
-    if st.session_state.show_calculations:
-        with st.expander("🔍 Complete Calculation Methodology", expanded=True):
-            transparency = calculator.get_calculation_transparency(selected_company)
-            
-            for metric, details in transparency['methodology_overview'].items():
-                st.subheader(f"{metric.replace('_', ' ').title()}")
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.markdown(f"**What it shows:** {details['what_it_shows']}")
-                    st.markdown(f"**Why it matters:** {details['why_it_matters']}")
-                
-                with col2:
-                    st.markdown("**Calculation Steps:**")
-                    for step in details['calculation_steps']:
-                        st.markdown(f"• {step}")
-                
-                with st.expander("⚠️ Limitations & Assumptions"):
-                    for limitation in details['limitations']:
-                        st.markdown(f"• {limitation}")
-                
-                st.markdown("---")
-            
-            # Data freshness info
-            st.subheader("Data Freshness")
-            freshness = transparency['data_freshness']
-            for source, frequency in freshness.items():
-                st.markdown(f"**{source.replace('_', ' ').title()}:** {frequency}")
+    # FORCE REFRESH - Get NEW metrics every time company changes
+    with st.spinner("Loading real company data..."):
+        company_metrics = calculator.get_company_metrics(selected_company)
     
-    # Real-time metrics grid
+    # Real-time metrics grid - USING FRESH DATA
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         current_roi = company_metrics.get('marketing_roi', 0)
+        roi_trend = company_metrics.get('roi_trend', 'Stable')
         st.metric(
             "Current Marketing ROI",
             f"{current_roi:.2f}x",
-            f"{company_metrics.get('roi_trend', 'Stable')}"
+            f"{roi_trend}"
         )
         st.markdown('<div class="metric-explanation">Based on stock performance attribution model</div>',
                    unsafe_allow_html=True)
     
     with col2:
-        # Marketing Efficiency (calculated from ROI)
-        efficiency = min(100, max(0, (current_roi - 1) * 50))  # Convert ROI to efficiency %
+        # Marketing Efficiency - RECALCULATED from current ROI
+        efficiency = min(100, max(0, (current_roi - 1) * 50))
         st.metric(
             "Marketing Efficiency",
             f"{efficiency:.0f}%",
@@ -315,14 +290,15 @@ with tab1:
                    unsafe_allow_html=True)
     
     with col3:
-        # Digital Ratio (industry estimate)
+        # Digital Ratio - RECALCULATED for current company
         industry = companies[selected_company]
         digital_ratios = {
             'Technology': 85,
             'Beauty & Personal Care': 70,
             'Beverages': 60,
-            'Consumer Goods': 65,
-            'Apparel & Footwear': 75
+            'Healthcare/Pharma': 65,
+            'Apparel & Footwear': 75,
+            'Other': 65
         }
         digital_ratio = digital_ratios.get(industry, 65)
         st.metric(
@@ -343,87 +319,6 @@ with tab1:
         )
         st.markdown('<div class="metric-explanation">Global market position</div>',
                    unsafe_allow_html=True)
-    
-    # Real stock price chart
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader(f"{selected_company} Stock Performance")
-        
-        # Get real stock data for chart
-        ticker_map = {
-            'L\'Oréal': 'OR.PA',
-            'Coca-Cola': 'KO',
-            'PepsiCo': 'PEP',
-            'Nike': 'NKE',
-            'Apple': 'AAPL',
-            'Microsoft': 'MSFT',
-            'Procter & Gamble': 'PG',
-            'Unilever': 'UL',
-            'Nestlé': 'NSRGY'
-        }
-        
-        ticker = ticker_map.get(selected_company)
-        if ticker:
-            try:
-                stock_data = yf.Ticker(ticker).history(period="1y")
-                if not stock_data.empty:
-                    fig = go.Figure()
-                    fig.add_trace(go.Scatter(
-                        x=stock_data.index,
-                        y=stock_data['Close'],
-                        mode='lines',
-                        name='Stock Price',
-                        line=dict(color='blue', width=2)
-                    ))
-                    fig.update_layout(
-                        title=f"12-Month Stock Performance ({ticker})",
-                        xaxis_title="Date",
-                        yaxis_title="Price",
-                        height=400
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-                    st.markdown(f'<div class="data-source">Data: Yahoo Finance ({ticker})</div>',
-                               unsafe_allow_html=True)
-                else:
-                    st.error("No stock data available")
-            except Exception as e:
-                st.error(f"Error loading stock data: {e}")
-        else:
-            st.warning("Stock ticker not mapped for this company")
-    
-    with col2:
-        st.subheader("Marketing ROI Trend")
-        
-        # Generate ROI trend based on stock performance
-        if ticker:
-            try:
-                stock_data = yf.Ticker(ticker).history(period="1y")
-                if not stock_data.empty:
-                    # Calculate rolling ROI based on stock performance
-                    returns = stock_data['Close'].pct_change(30)  # 30-day returns
-                    roi_estimate = (returns * 0.20 / 0.05) + 1  # Marketing attribution model
-                    roi_estimate = roi_estimate.clip(0.5, 5.0)  # Cap values
-                    
-                    fig = go.Figure()
-                    fig.add_trace(go.Scatter(
-                        x=stock_data.index,
-                        y=roi_estimate,
-                        mode='lines+markers',
-                        name='Estimated Marketing ROI',
-                        line=dict(color='green', width=2)
-                    ))
-                    fig.update_layout(
-                        title="Marketing ROI Trend (Stock-Based Estimate)",
-                        xaxis_title="Date",
-                        yaxis_title="ROI Multiple",
-                        height=400
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-                    st.markdown('<div class="data-source">Calculated: Stock performance × 20% attribution ÷ 5% spend ratio</div>',
-                               unsafe_allow_html=True)
-            except Exception as e:
-                st.error(f"Error calculating ROI trend: {e}")
 
 with tab2:
     st.header(f"Agency Switch Predictions for {selected_company}")
