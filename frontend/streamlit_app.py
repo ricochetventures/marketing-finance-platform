@@ -171,7 +171,7 @@ if not companies:
     st.stop()
 else:
     st.sidebar.success(f"✅ Loaded {len(companies)} companies")
-    
+
 # Sidebar
 with st.sidebar:
     st.header("Company Selection")
@@ -319,6 +319,84 @@ with tab1:
         )
         st.markdown('<div class="metric-explanation">Global market position</div>',
                    unsafe_allow_html=True)
+
+    # Real stock price chart - ADD THIS ENTIRE SECTION HERE
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader(f"{selected_company} Stock Performance")
+        
+        # Get ticker from calculator
+        stock_data_raw = calculator._get_stock_data(selected_company)
+        ticker = None
+        
+        if stock_data_raw:
+            ticker = stock_data_raw.get('ticker')
+        
+        if ticker:
+            try:
+                import yfinance as yf
+                stock_data = yf.Ticker(ticker).history(period="1y")
+                
+                if not stock_data.empty:
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(
+                        x=stock_data.index,
+                        y=stock_data['Close'],
+                        mode='lines',
+                        name='Stock Price',
+                        line=dict(color='blue', width=2)
+                    ))
+                    fig.update_layout(
+                        title=f"12-Month Stock Performance ({ticker})",
+                        xaxis_title="Date",
+                        yaxis_title="Price",
+                        height=400
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.markdown(f'<div class="data-source">Data: Yahoo Finance ({ticker}), Real-time with 15-min delay</div>',
+                               unsafe_allow_html=True)
+                else:
+                    st.warning(f"Stock data temporarily unavailable for {ticker}")
+            except Exception as e:
+                st.error(f"Error loading stock data: {str(e)}")
+                st.info("Please check your internet connection and try refreshing the page")
+        else:
+            st.warning(f"Stock ticker not found for {selected_company}. The system is learning ticker mappings.")
+            st.info("Try selecting a different company or wait for the AI to discover this ticker.")
+    
+    with col2:
+        st.subheader("Marketing ROI Trend")
+        
+        # Generate ROI trend based on stock performance
+        if ticker:
+            try:
+                stock_data = yf.Ticker(ticker).history(period="1y")
+                if not stock_data.empty:
+                    # Calculate rolling ROI based on stock performance
+                    returns = stock_data['Close'].pct_change(30)  # 30-day returns
+                    roi_estimate = (returns * 0.20 / 0.05) + 1  # Marketing attribution model
+                    roi_estimate = roi_estimate.clip(0.5, 5.0)  # Cap values
+                    
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(
+                        x=stock_data.index,
+                        y=roi_estimate,
+                        mode='lines+markers',
+                        name='Estimated Marketing ROI',
+                        line=dict(color='green', width=2)
+                    ))
+                    fig.update_layout(
+                        title="Marketing ROI Trend (Stock-Based Estimate)",
+                        xaxis_title="Date",
+                        yaxis_title="ROI Multiple",
+                        height=400
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.markdown('<div class="data-source">Calculated: Stock performance × 20% attribution ÷ 5% spend ratio</div>',
+                               unsafe_allow_html=True)
+            except Exception as e:
+                st.error(f"Error calculating ROI trend: {e}")
 
 with tab2:
     st.header(f"Agency Switch Predictions for {selected_company}")
