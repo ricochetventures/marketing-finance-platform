@@ -417,7 +417,8 @@ with tab2:
             "Confidence Level:",
             options=[80, 90, 95, 99],
             value=95,
-            format_func=lambda x: f"{x}%"
+            format_func=lambda x: f"{x}%",
+            help="Statistical confidence interval: 95% means we're 95% confident the actual result will fall within the predicted range"
         )
         
         if st.button("Generate Prediction", type="primary"):
@@ -475,12 +476,27 @@ with tab2:
             # Show prediction results
             col_a, col_b, col_c = st.columns(3)
             
+            # Show prediction results with CLEAR confidence explanation
+            col_a, col_b, col_c = st.columns(3)
+            
             with col_a:
                 st.metric(
                     "Predicted ROI Impact",
                     f"{pred['roi_change']:+.1f}%",
-                    f"±{pred['confidence_range']:.1f}% confidence range"
+                    f"±{pred['confidence_range']:.1f}% range"
                 )
+                with st.expander("What does this mean?"):
+                    st.markdown(f"""
+                    **Prediction:** {pred['roi_change']:+.1f}%
+                    
+                    **{confidence_level}% Confidence Range:** 
+                    - Best case: {pred['roi_change'] + pred['confidence_range']:+.1f}%
+                    - Worst case: {pred['roi_change'] - pred['confidence_range']:+.1f}%
+                    
+                    This means we are {confidence_level}% confident the actual ROI impact will fall between these two values.
+                    
+                    **In simple terms:** If you ran this scenario 100 times, {confidence_level} times the result would be within this range.
+                    """)
             
             with col_b:
                 current_agency = calculator.get_company_metrics(selected_company).get('current_agency', 'Unknown')
