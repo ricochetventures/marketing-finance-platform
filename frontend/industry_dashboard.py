@@ -6,11 +6,11 @@ import yfinance as yf
 from datetime import datetime, timedelta
 
 def create_industry_performance_dashboard():
-    """Enhanced industry comparison with time period toggles"""
+    """Enhanced industry comparison with time period toggles and working data fetching"""
     
-    st.header("Industry Performance Analysis")
+    st.header("📈 Industry Performance Analysis")
     
-    # Industry selector
+    # Industry selector with ACTUAL companies
     industries = {
         'Healthcare/Pharma': {
             'companies': {
@@ -19,7 +19,9 @@ def create_industry_performance_dashboard():
                 'Novo Nordisk': {'ticker': 'NVO', 'agency': 'WPP'},
                 'AbbVie': {'ticker': 'ABBV', 'agency': 'IPG'},
                 'Pfizer': {'ticker': 'PFE', 'agency': 'Publicis'},
-                'Johnson & Johnson': {'ticker': 'JNJ', 'agency': 'WPP'}
+                'Johnson & Johnson': {'ticker': 'JNJ', 'agency': 'WPP'},
+                'Merck': {'ticker': 'MRK', 'agency': 'IPG'},
+                'Bristol-Myers Squibb': {'ticker': 'BMY', 'agency': 'Publicis'}
             }
         },
         'Beauty & Personal Care': {
@@ -28,16 +30,18 @@ def create_industry_performance_dashboard():
                 'Unilever': {'ticker': 'UL', 'agency': 'WPP'},
                 'Procter & Gamble': {'ticker': 'PG', 'agency': 'Publicis'},
                 'Estée Lauder': {'ticker': 'EL', 'agency': 'Omnicom'},
-                'Shiseido': {'ticker': '4911.T', 'agency': 'Dentsu'}
+                'Shiseido': {'ticker': '4911.T', 'agency': 'Dentsu'},
+                'Coty': {'ticker': 'COTY', 'agency': 'IPG'}
             }
         },
         'Technology': {
             'companies': {
-                'Apple': {'ticker': 'AAPL', 'agency': 'Multiple'},
+                'Apple': {'ticker': 'AAPL', 'agency': 'In-house'},
                 'Microsoft': {'ticker': 'MSFT', 'agency': 'WPP'},
                 'Google': {'ticker': 'GOOGL', 'agency': 'In-house'},
                 'Meta': {'ticker': 'META', 'agency': 'WPP'},
-                'Amazon': {'ticker': 'AMZN', 'agency': 'Multiple'}
+                'Amazon': {'ticker': 'AMZN', 'agency': 'Multiple'},
+                'NVIDIA': {'ticker': 'NVDA', 'agency': 'Multiple'}
             }
         },
         'Beverages': {
@@ -45,7 +49,17 @@ def create_industry_performance_dashboard():
                 'Coca-Cola': {'ticker': 'KO', 'agency': 'WPP'},
                 'PepsiCo': {'ticker': 'PEP', 'agency': 'Omnicom'},
                 'Monster Beverage': {'ticker': 'MNST', 'agency': 'Independent'},
-                'Dr Pepper': {'ticker': 'KDP', 'agency': 'Publicis'}
+                'Dr Pepper': {'ticker': 'KDP', 'agency': 'Publicis'},
+                'Constellation Brands': {'ticker': 'STZ', 'agency': 'WPP'}
+            }
+        },
+        'Apparel & Footwear': {
+            'companies': {
+                'Nike': {'ticker': 'NKE', 'agency': 'Wieden+Kennedy'},
+                'Adidas': {'ticker': 'ADS.DE', 'agency': 'Publicis'},
+                'Lululemon': {'ticker': 'LULU', 'agency': 'Independent'},
+                'Under Armour': {'ticker': 'UAA', 'agency': 'IPG'},
+                'VF Corporation': {'ticker': 'VFC', 'agency': 'WPP'}
             }
         }
     }
@@ -64,56 +78,65 @@ def create_industry_performance_dashboard():
     with col2:
         show_agencies = st.checkbox("Show Agency Relationships", value=True)
     
-    # Get data for selected industry
-    industry_data = industries[selected_industry]
-    companies_data = []
-    
     # Map time period to yfinance period
     period_map = {"1 Year": "1y", "5 Years": "5y", "10 Years": "10y"}
     period = period_map[time_period]
     
     st.subheader(f"{selected_industry} Industry Performance - {time_period}")
     
-    # Fetch stock data
-    with st.spinner("Loading industry performance data..."):
-        for company, details in industry_data['companies'].items():
-            try:
-                ticker = details['ticker']
-                stock = yf.Ticker(ticker)
-                hist = stock.history(period=period)
+    # Get data for selected industry
+    industry_data = industries[selected_industry]
+    companies_data = []
+    
+    # Fetch stock data with progress bar
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    total_companies = len(industry_data['companies'])
+    
+    for idx, (company, details) in enumerate(industry_data['companies'].items()):
+        status_text.text(f"Loading {company}... ({idx + 1}/{total_companies})")
+        progress_bar.progress((idx + 1) / total_companies)
+        
+        try:
+            ticker = details['ticker']
+            stock = yf.Ticker(ticker)
+            hist = stock.history(period=period)
+            
+            if not hist.empty:
+                # Calculate performance metrics
+                current_price = hist['Close'].iloc[-1]
+                start_price = hist['Close'].iloc[0]
+                total_return = ((current_price - start_price) / start_price) * 100
                 
-                if not hist.empty:
-                    # Calculate performance metrics
-                    current_price = hist['Close'].iloc[-1]
-                    start_price = hist['Close'].iloc[0]
-                    total_return = ((current_price - start_price) / start_price) * 100
-                    
-                    # Calculate volatility
-                    returns = hist['Close'].pct_change().dropna()
-                    volatility = returns.std() * (252 ** 0.5) * 100  # Annualized
-                    
-                    companies_data.append({
-                        'Company': company,
-                        'Ticker': ticker,
-                        'Agency': details['agency'],
-                        'Current_Price': current_price,
-                        'Total_Return': total_return,
-                        'Volatility': volatility,
-                        'Stock_History': hist['Close'],
-                        'Dates': hist.index
-                    })
-                    
-            except Exception as e:
-                st.warning(f"Could not fetch data for {company}: {e}")
+                # Calculate volatility
+                returns = hist['Close'].pct_change().dropna()
+                volatility = returns.std() * (252 ** 0.5) * 100  # Annualized
+                
+                companies_data.append({
+                    'Company': company,
+                    'Ticker': ticker,
+                    'Agency': details['agency'],
+                    'Current_Price': current_price,
+                    'Total_Return': total_return,
+                    'Volatility': volatility,
+                    'Stock_History': hist['Close'],
+                    'Dates': hist.index
+                })
+        
+        except Exception as e:
+            st.warning(f"Could not fetch data for {company} ({ticker}): {str(e)}")
+            continue
+    
+    progress_bar.empty()
+    status_text.empty()
     
     if companies_data:
-        # Create performance comparison chart
+        # SUCCESS - Show visualizations
         col1, col2 = st.columns(2)
         
         with col1:
             st.subheader("Stock Performance Comparison")
-            
-            fig = go.Figure()
             
             # Agency color mapping
             agency_colors = {
@@ -124,15 +147,18 @@ def create_industry_performance_dashboard():
                 'Dentsu': '#FFEAA7',
                 'Multiple': '#DDA0DD',
                 'Independent': '#98D8C8',
-                'In-house': '#F7DC6F'
+                'In-house': '#F7DC6F',
+                'Wieden+Kennedy': '#FF9A00'
             }
+            
+            fig = go.Figure()
             
             for company_data in companies_data:
                 company = company_data['Company']
                 agency = company_data['Agency']
                 color = agency_colors.get(agency, '#95A5A6')
                 
-                # Normalize stock prices to start at 100 for comparison
+                # Normalize stock prices to start at 100
                 stock_history = company_data['Stock_History']
                 normalized_prices = (stock_history / stock_history.iloc[0]) * 100
                 
@@ -154,7 +180,13 @@ def create_industry_performance_dashboard():
                 xaxis_title="Date",
                 yaxis_title="Normalized Price (Base = 100)",
                 height=500,
-                showlegend=True
+                showlegend=True,
+                legend=dict(
+                    yanchor="top",
+                    y=0.99,
+                    xanchor="left",
+                    x=0.01
+                )
             )
             
             st.plotly_chart(fig, use_container_width=True)
@@ -172,7 +204,8 @@ def create_industry_performance_dashboard():
                 values=list(agency_counts.values()),
                 names=list(agency_counts.keys()),
                 title=f"Agency Market Share - {selected_industry}",
-                color_discrete_map=agency_colors
+                color_discrete_map=agency_colors,
+                hole=0.3
             )
             fig_pie.update_layout(height=500)
             st.plotly_chart(fig_pie, use_container_width=True)
@@ -184,7 +217,7 @@ def create_industry_performance_dashboard():
         df = pd.DataFrame(companies_data)
         df = df[['Company', 'Agency', 'Total_Return', 'Volatility']].copy()
         
-        # Add performance ranking
+        # Add rankings
         df['Performance_Rank'] = df['Total_Return'].rank(ascending=False).astype(int)
         df['Risk_Adjusted_Return'] = df['Total_Return'] / df['Volatility']
         
@@ -193,13 +226,9 @@ def create_industry_performance_dashboard():
         display_df['Total_Return'] = display_df['Total_Return'].apply(lambda x: f"{x:+.1f}%")
         display_df['Volatility'] = display_df['Volatility'].apply(lambda x: f"{x:.1f}%")
         display_df['Risk_Adjusted_Return'] = display_df['Risk_Adjusted_Return'].apply(lambda x: f"{x:.2f}")
+        display_df['Performance_Rank'] = display_df['Performance_Rank'].apply(lambda x: f"#{x}")
         
-        # Style the dataframe
-        styled_df = display_df.style.format({
-            'Performance_Rank': lambda x: f"#{x}"
-        }).background_gradient(subset=['Risk_Adjusted_Return'], cmap='RdYlGn')
-        
-        st.dataframe(styled_df, use_container_width=True)
+        st.dataframe(display_df, use_container_width=True)
         
         # Agency performance analysis
         st.subheader("Agency Performance Analysis")
@@ -227,18 +256,14 @@ def create_industry_performance_dashboard():
             
             agency_summary.append({
                 'Agency': agency,
-                'Avg_Return': avg_return,
-                'Avg_Volatility': avg_volatility,
+                'Avg_Return': f"{avg_return:+.1f}%",
+                'Avg_Volatility': f"{avg_volatility:.1f}%",
                 'Client_Count': len(data['companies']),
                 'Sample_Clients': ', '.join(data['companies'][:3])
             })
         
         agency_df = pd.DataFrame(agency_summary)
-        agency_df = agency_df.sort_values('Avg_Return', ascending=False)
-        
-        # Format agency summary
-        agency_df['Avg_Return'] = agency_df['Avg_Return'].apply(lambda x: f"{x:+.1f}%")
-        agency_df['Avg_Volatility'] = agency_df['Avg_Volatility'].apply(lambda x: f"{x:.1f}%")
+        agency_df = agency_df.sort_values('Client_Count', ascending=False)
         
         st.dataframe(agency_df, use_container_width=True)
         
@@ -275,10 +300,10 @@ def create_industry_performance_dashboard():
             st.caption(f"Agency: {worst_performer['Agency']}")
         
         # Data sources and methodology
-        with st.expander("Data Sources & Methodology"):
+        with st.expander("📊 Data Sources & Methodology"):
             st.markdown("**Data Sources:**")
             st.markdown("• Stock prices: Yahoo Finance API (real-time)")
-            st.markdown("• Agency relationships: Industry databases, press releases")
+            st.markdown("• Agency relationships: Industry databases, company press releases")
             st.markdown("• Performance calculations: Total return over selected period")
             
             st.markdown("**Methodology:**")
@@ -289,11 +314,12 @@ def create_industry_performance_dashboard():
             
             st.markdown("**Limitations:**")
             st.markdown("• Stock performance influenced by many factors beyond marketing")
-            st.markdown("• Agency attribution is estimated, not measured directly")
+            st.markdown("• Agency attribution is estimated based on public information")
             st.markdown("• External market conditions affect all companies")
     
     else:
-        st.error("Unable to fetch industry data. Please try again later.")
+        st.error("❌ Unable to fetch industry data. Please check your internet connection and try again.")
+        st.info("If the problem persists, try selecting a different industry or time period.")
 
 # To integrate into main app:
 # In the Compare Agencies tab, replace existing content with:
