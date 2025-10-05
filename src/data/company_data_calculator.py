@@ -7,6 +7,7 @@ from typing import Dict, List, Optional
 import logging
 from pathlib import Path
 import json
+from src.data.web_scraper import MarketingDataScraper
 
 class CompanyDataCalculator:
     """
@@ -17,6 +18,7 @@ class CompanyDataCalculator:
         self.data_sources = {}
         self.calculation_methods = {}
         self.last_updated = {}
+        self.scraper = MarketingDataScraper()
         
     def get_company_metrics(self, company_name: str) -> Dict:
         """
@@ -229,141 +231,49 @@ class CompanyDataCalculator:
 
 
     def _get_current_agency(self, company_name: str) -> Dict:
-        """
-        Determine current agency with methodology transparency
-        """
-        # Known agency relationships (would be replaced with real data source)
-        known_relationships = {
-            'L\'Oréal': {
-                'agency': 'Publicis',
-                'method': 'Industry database lookup',
-                'source': 'AdAge Agency Report 2024',
-                'confidence': 'High',
-                'start_date': '2019-01-01'
-            },
-            'Coca-Cola': {
-                'agency': 'WPP',
-                'method': 'Recent press releases and industry reports',
-                'source': 'Marketing Land, AdWeek',
-                'confidence': 'High',
-                'start_date': '2021-03-01'
-            },
-            'Nike': {
-                'agency': 'Wieden+Kennedy',
-                'method': 'Long-standing relationship, confirmed via press',
-                'source': 'Nike press releases, W+K website',
-                'confidence': 'Very High',
-                'start_date': '1982-01-01'
-            }
-        }
-        
-        if company_name in known_relationships:
-            rel = known_relationships[company_name]
-            
-            # Calculate tenure
-            start_date = datetime.strptime(rel['start_date'], '%Y-%m-%d')
-            tenure_months = (datetime.now() - start_date).days / 30.44
-            
-            return {
-                'agency': rel['agency'],
-                'tenure_months': round(tenure_months, 1),
-                'method': rel['method'],
-                'source': rel['source'],
-                'confidence': rel['confidence']
-            }
-        else:
-            return {
-                'agency': 'Unknown',
-                'tenure_months': 0,
-                'method': 'No reliable data found',
-                'source': 'N/A',
-                'confidence': 'None'
-            }
+        """Use web scraper to get current agency"""
+        return self.scraper.get_current_agency(company_name)
+
     
     def _calculate_marketing_roi(self, company_name: str, stock_data: Optional[Dict]) -> Dict:
-        """
-        Calculate marketing ROI using multiple methodologies
-        """
-        # Method 1: Stock Performance Proxy
-        if stock_data:
-            # Assume marketing contributes 15-25% to stock performance
-            stock_return = stock_data['yearly_change'] / 100
-            marketing_contribution = 0.20  # 20% assumption
-            estimated_marketing_impact = stock_return * marketing_contribution
-            
-            # Convert to ROI multiple (assuming 5% marketing spend of revenue)
-            marketing_spend_ratio = 0.05
-            roi_multiple = (estimated_marketing_impact / marketing_spend_ratio) + 1
-            
+        """Use web scraper to get marketing ROI"""
+        ticker = stock_data.get('ticker') if stock_data else None
+        if ticker:
+            return self.scraper.get_marketing_roi(company_name, ticker)
+        else:
+            # Fallback to industry benchmark
             return {
-                'roi': max(0.5, min(5.0, roi_multiple)),  # Cap between 0.5x and 5.0x
-                'trend': 'Positive' if estimated_marketing_impact > 0 else 'Negative',
-                'calculation_method': 'Stock performance attribution model',
-                'formula': '(Stock_Return * Marketing_Attribution_Factor / Marketing_Spend_Ratio) + 1',
-                'sources': ['Yahoo Finance stock data'],
-                'assumptions': [
-                    'Marketing contributes 20% to stock performance',
-                    'Marketing spend is 5% of revenue',
-                    'Linear relationship between marketing and stock performance'
-                ]
+                'roi': 2.1,
+                'trend': 'Unknown',
+                'calculation_method': 'Industry benchmark',
+                'formula': 'Consumer goods industry average',
+                'sources': ['Industry reports'],
+                'assumptions': ['No company-specific data available']
             }
-        
-        # Method 2: Industry benchmark (fallback)
-        industry_benchmarks = {
-            'Consumer Goods': 2.1,
-            'Technology': 2.8,
-            'Healthcare': 1.9,
-            'Retail': 2.4
-        }
-        
-        return {
-            'roi': 2.1,  # Default consumer goods benchmark
-            'trend': 'Stable',
-            'calculation_method': 'Industry benchmark estimation',
-            'formula': 'Industry average ROI for consumer goods sector',
-            'sources': ['Marketing Accountability Standards Board', 'Nielsen ROI Study'],
-            'assumptions': ['Industry average is representative of company performance']
-        }
     
     def _calculate_market_share(self, company_name: str) -> Dict:
-        """
-        Calculate market share with transparent methodology
-        """
-        # Industry market share estimates (would be replaced with real data)
-        market_shares = {
-            'L\'Oréal': {
-                'share': 11.3,
-                'position': 'Market Leader',
-                'method': 'Beauty industry revenue analysis',
-                'source': 'Euromonitor International Beauty Report 2024',
-                'industry_scope': 'Global beauty and personal care market'
-            },
-            'Coca-Cola': {
-                'share': 20.5,
-                'position': 'Market Leader',
-                'method': 'Beverage market revenue analysis',
-                'source': 'Beverage Digest Market Report',
-                'industry_scope': 'Global non-alcoholic beverage market'
-            },
-            'Nike': {
-                'share': 27.4,
-                'position': 'Market Leader',
-                'method': 'Athletic footwear and apparel market analysis',
-                'source': 'Sports Business Journal Market Study',
-                'industry_scope': 'Global athletic footwear market'
-            }
-        }
+        """Use web scraper to get market share"""
+        # Simple industry categorization without importing from streamlit
+        industry = self._categorize_industry(company_name)
         
-        if company_name in market_shares:
-            return market_shares[company_name]
+        return self.scraper.get_market_share(company_name, industry)
+
+    def _categorize_industry(self, company_name: str) -> str:
+        """Simple industry categorization"""
+        name_lower = company_name.lower()
+        
+        if any(word in name_lower for word in ['cola', 'pepsi', 'drink', 'beverage', 'beer', 'monster']):
+            return 'Beverages'
+        elif any(word in name_lower for word in ['tech', 'apple', 'google', 'meta', 'microsoft', 'amazon']):
+            return 'Technology'
+        elif any(word in name_lower for word in ['oreal', 'beauty', 'lauder', 'shiseido', 'unilever', 'procter']):
+            return 'Beauty & Personal Care'
+        elif any(word in name_lower for word in ['pharma', 'novartis', 'pfizer', 'lilly', 'abbvie']):
+            return 'Healthcare/Pharma'
+        elif any(word in name_lower for word in ['nike', 'adidas', 'apparel', 'footwear']):
+            return 'Apparel & Footwear'
         else:
-            return {
-                'share': 0.0,
-                'position': 'Unknown',
-                'method': 'No reliable market data available',
-                'source': 'N/A',
-                'industry_scope': 'Undefined'
-            }
+            return 'Other'    
     
     def get_calculation_transparency(self, company_name: str) -> Dict:
         """
