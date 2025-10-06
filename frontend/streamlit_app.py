@@ -182,7 +182,6 @@ with st.sidebar:
     
     company_list = sorted(list(companies.keys()))
     
-    # Initialize session state if needed
     if 'selected_company' not in st.session_state or st.session_state.selected_company not in company_list:
         st.session_state.selected_company = company_list[0]
     
@@ -190,64 +189,69 @@ with st.sidebar:
         "Select Company:",
         company_list,
         index=company_list.index(st.session_state.selected_company),
-        help=f"{len(company_list)} companies available"
+        help=f"{len(company_list)} publicly traded companies available"
     )
     
     if selected_company != st.session_state.selected_company:
         st.session_state.selected_company = selected_company
         st.rerun()
     
-    # Get real company data
-    with st.spinner("Loading real company data..."):
+    st.markdown("### Current Metrics")
+    st.markdown("*Real-time calculated metrics*")
+    
+    # Get company data
+    with st.spinner("Loading..."):
         company_metrics = calculator.get_company_metrics(selected_company)
     
-    st.markdown("### Current Status")
-    st.markdown("*All data calculated in real-time*")
+    # Stock Price
+    current_price = company_metrics.get('current_price', 0)
+    yearly_change = company_metrics.get('yearly_change', 0)
+    period_desc = company_metrics.get('calculations_used', {}).get('stock_price', {}).get('period_description', 'Period')
     
-    # Stock Price with calculation explanation
     st.metric(
         "Stock Price",
-        f"${company_metrics.get('current_price', 0):.2f}",
-        f"{company_metrics.get('yearly_change', 0):+.1f}%"
+        f"${current_price:.2f}",
+        f"{yearly_change:+.1f}%"
     )
-    if company_metrics.get('calculations_used', {}).get('stock_price'):
-        with st.expander("📊 How this is calculated"):
-            calc = company_metrics['calculations_used']['stock_price']
-            st.markdown(f"**Method:** {calc['method']}")
-            st.markdown(f"**Data Source:** {calc['data_source']}")
-            st.markdown(f"**Formula:** `{calc['formula']}`")
+    st.caption(f"📈 {yearly_change:+.1f}% {period_desc} return")
     
-    # Current Agency with source
-    st.metric("Current Agency", company_metrics.get('current_agency', 'Unknown'))
-    if company_metrics.get('calculations_used', {}).get('current_agency'):
-        with st.expander("🏢 Agency data source"):
-            calc = company_metrics['calculations_used']['current_agency']
-            st.markdown(f"**Source:** {calc['data_source']}")
-            st.markdown(f"**Method:** {calc['method']}")
-            st.markdown(f"**Confidence:** {calc['confidence_level']}")
+    if yearly_change < 0:
+        st.caption(f"⚠️ Stock is down {abs(yearly_change):.1f}% compared to start of period")
+    else:
+        st.caption(f"✓ Stock is up {yearly_change:.1f}% compared to start of period")
     
-    # Marketing ROI with methodology
-    st.metric("Marketing ROI", f"{company_metrics.get('marketing_roi', 0):.2f}x")
-    if company_metrics.get('calculations_used', {}).get('marketing_roi'):
-        with st.expander("📈 ROI Calculation"):
-            calc = company_metrics['calculations_used']['marketing_roi']
-            st.markdown(f"**Method:** {calc['method']}")
-            st.markdown(f"**Formula:** `{calc['formula']}`")
-            st.markdown("**Assumptions:**")
-            for assumption in calc.get('assumptions', []):
-                st.markdown(f"• {assumption}")
+    # Current Agency (Primary categories only)
+    st.markdown("### Primary Agencies")
     
-    # Market Share with source
-    st.metric("Market Share", f"{company_metrics.get('market_share', 0):.1f}%")
-    if company_metrics.get('calculations_used', {}).get('market_share'):
-        with st.expander("🎯 Market Share Data"):
-            calc = company_metrics['calculations_used']['market_share']
-            st.markdown(f"**Source:** {calc['data_source']}")
-            st.markdown(f"**Industry Scope:** {calc['industry_definition']}")
+    from src.data.agency_data_scraper import AgencyDataScraper
+    agency_scraper = AgencyDataScraper()
+    agencies = agency_scraper.get_all_agencies(selected_company)
     
-    # Show full transparency report
-    if st.button("📋 Full Calculation Report"):
-        st.session_state.show_calculations = True
+    if agencies:
+        # Show top 3 categories
+        primary_cats = ['Creative AOR', 'Media AOR', 'Digital/Interactive AOR']
+        shown = 0
+        for cat in primary_cats:
+            if cat in agencies and shown < 3:
+                info = agencies[cat]
+                st.markdown(f"**{cat.replace(' AOR', '')}:** {info['agency']}")
+                shown += 1
+        
+        if len(agencies) > 3:
+            st.caption(f"+ {len(agencies) - shown} more categories")
+    else:
+        st.info("Agency data being collected...")
+    
+    # Marketing ROI
+    roi = company_metrics.get('marketing_roi', 0)
+    st.metric("Marketing ROI", f"{roi:.2f}x")
+    
+    with st.expander("ℹ️ What this means"):
+        st.markdown(f"For every $1 spent on marketing, {selected_company} generates approximately ${roi:.2f} in returns.")
+    
+    # Market Share
+    market_share = company_metrics.get('market_share', 0)
+    st.metric("Market Share", f"{market_share:.1f}%")
 
 # Main content tabs
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
