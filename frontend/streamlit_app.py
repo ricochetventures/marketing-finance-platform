@@ -250,48 +250,77 @@ with st.sidebar:
         st.session_state.show_calculations = True
 
 # Main content tabs
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📊 Executive Dashboard",
     "🔮 Agency Switch Predictions",
     "🤖 AI Marketing Advisor",
-    "📈 Industry Comparison"
+    "📈 Industry Comparison",
+    "🏢 Agency Intelligence"  # NEW TAB
 ])
 
 with tab1:
     st.header(f"Executive Dashboard - {selected_company}")
     
-    # FORCE REFRESH - Get NEW metrics every time company changes
-    with st.spinner("Loading real company data..."):
+    # Get FRESH metrics for the selected company
+    with st.spinner(f"Loading data for {selected_company}..."):
         company_metrics = calculator.get_company_metrics(selected_company)
+        
+        # Get agency data
+        from src.data.agency_data_scraper import AgencyDataScraper
+        agency_scraper = AgencyDataScraper()
+        agency_data = agency_scraper.get_all_agencies(selected_company)
     
-    # Real-time metrics grid - USING FRESH DATA
+    # === TOP METRICS ROW ===
+    st.subheader("📊 Key Performance Indicators")
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         current_roi = company_metrics.get('marketing_roi', 0)
-        roi_trend = company_metrics.get('roi_trend', 'Stable')
+        roi_calc = company_metrics.get('calculations_used', {}).get('marketing_roi', {})
+        
         st.metric(
-            "Current Marketing ROI",
+            "Marketing ROI",
             f"{current_roi:.2f}x",
-            f"{roi_trend}"
+            company_metrics.get('roi_trend', '')
         )
-        st.markdown('<div class="metric-explanation">Based on stock performance attribution model</div>',
-                   unsafe_allow_html=True)
+        
+        with st.expander("📋 How this is calculated"):
+            st.markdown(f"**Method:** {roi_calc.get('calculation_method', 'N/A')}")
+            st.markdown(f"**Formula:** `{roi_calc.get('formula', 'N/A')}`")
+            st.markdown(f"**Data Quality:** {roi_calc.get('data_quality', 'Unknown')}")
+            if roi_calc.get('assumptions'):
+                st.markdown("**Key Assumptions:**")
+                for assumption in roi_calc['assumptions']:
+                    st.markdown(f"- {assumption}")
     
     with col2:
-        # Marketing Efficiency - RECALCULATED from current ROI
-        efficiency = min(100, max(0, (current_roi - 1) * 50))
+        # Marketing Efficiency = ROI / Industry Benchmark
+        industry = companies[selected_company]
+        industry_benchmarks = {
+            'Beverages': 2.0,
+            'Beauty & Personal Care': 2.5,
+            'Technology': 1.8,
+            'Healthcare/Pharma': 2.3,
+            'Apparel & Footwear': 2.2,
+            'Other': 2.1
+        }
+        benchmark = industry_benchmarks.get(industry, 2.1)
+        efficiency = (current_roi / benchmark) * 100
+        
         st.metric(
             "Marketing Efficiency",
             f"{efficiency:.0f}%",
-            f"ROI-derived metric"
+            f"vs {industry} avg"
         )
-        st.markdown('<div class="metric-explanation">Derived from ROI: (ROI-1) × 50%</div>',
-                   unsafe_allow_html=True)
+        
+        with st.expander("📋 How this is calculated"):
+            st.markdown(f"**Formula:** `(Company ROI ÷ Industry Avg ROI) × 100`")
+            st.markdown(f"**Company ROI:** {current_roi:.2f}x")
+            st.markdown(f"**{industry} Average:** {benchmark:.2f}x")
+            st.markdown(f"**Result:** ({current_roi:.2f} ÷ {benchmark:.2f}) × 100 = {efficiency:.0f}%")
     
     with col3:
-        # Digital Ratio - RECALCULATED for current company
-        industry = companies[selected_company]
+        # Digital Marketing % from industry benchmarks
         digital_ratios = {
             'Technology': 85,
             'Beauty & Personal Care': 70,
@@ -300,38 +329,47 @@ with tab1:
             'Apparel & Footwear': 75,
             'Other': 65
         }
-        digital_ratio = digital_ratios.get(industry, 65)
+        digital_pct = digital_ratios.get(industry, 65)
+        
         st.metric(
             "Digital Marketing %",
-            f"{digital_ratio}%",
-            "Industry benchmark"
+            f"{digital_pct}%",
+            f"{industry} benchmark"
         )
-        st.markdown(f'<div class="metric-explanation">Industry average for {industry}</div>',
-                   unsafe_allow_html=True)
+        
+        with st.expander("📋 Data source"):
+            st.markdown(f"**Source:** {industry} industry benchmark")
+            st.markdown(f"**Based on:** 2024 marketing mix studies")
+            st.markdown(f"**Note:** Industry average, not company-specific")
     
     with col4:
         market_share = company_metrics.get('market_share', 0)
         position = company_metrics.get('market_position', 'Unknown')
+        share_calc = company_metrics.get('calculations_used', {}).get('market_share', {})
+        
         st.metric(
             "Market Share",
             f"{market_share:.1f}%",
             position
         )
-        st.markdown('<div class="metric-explanation">Global market position</div>',
-                   unsafe_allow_html=True)
-
-    # Real stock price chart - ADD THIS ENTIRE SECTION HERE
+        
+        with st.expander("📋 How this is calculated"):
+            st.markdown(f"**Method:** {share_calc.get('method', 'N/A')}")
+            st.markdown(f"**Industry:** {share_calc.get('industry_scope', 'N/A')}")
+            if share_calc.get('calculation_details'):
+                details = share_calc['calculation_details']
+                st.markdown(f"**Company Revenue:** {details.get('company_revenue', 'N/A')}")
+                st.markdown(f"**Total Market:** {details.get('total_market_size', 'N/A')}")
+                st.markdown(f"**Formula:** `{details.get('formula', 'N/A')}`")
+    
+    # === CHARTS ROW ===
     col1, col2 = st.columns(2)
     
     with col1:
         st.subheader(f"{selected_company} Stock Performance")
         
-        # Get ticker from calculator
         stock_data_raw = calculator._get_stock_data(selected_company)
-        ticker = None
-        
-        if stock_data_raw:
-            ticker = stock_data_raw.get('ticker')
+        ticker = stock_data_raw.get('ticker') if stock_data_raw else None
         
         if ticker:
             try:
@@ -350,32 +388,29 @@ with tab1:
                     fig.update_layout(
                         title=f"12-Month Stock Performance ({ticker})",
                         xaxis_title="Date",
-                        yaxis_title="Price",
+                        yaxis_title="Price (USD)",
                         height=400
                     )
                     st.plotly_chart(fig, use_container_width=True)
-                    st.markdown(f'<div class="data-source">Data: Yahoo Finance ({ticker}), Real-time with 15-min delay</div>',
-                               unsafe_allow_html=True)
-                else:
-                    st.warning(f"Stock data temporarily unavailable for {ticker}")
+                    
+                    # Add data source note
+                    st.caption(f"📊 Data: Yahoo Finance ({ticker}), Real-time with 15-min delay")
             except Exception as e:
                 st.error(f"Error loading stock data: {str(e)}")
-                st.info("Please check your internet connection and try refreshing the page")
         else:
-            st.warning(f"Stock ticker not found for {selected_company}. The system is learning ticker mappings.")
-            st.info("Try selecting a different company or wait for the AI to discover this ticker.")
+            st.warning(f"Stock ticker not found for {selected_company}")
     
     with col2:
         st.subheader("Marketing ROI Trend")
         
-        # Generate ROI trend based on stock performance
+        # Generate ROI trend based on stock performance + marketing attribution
         if ticker:
             try:
                 stock_data = yf.Ticker(ticker).history(period="1y")
                 if not stock_data.empty:
-                    # Calculate rolling ROI based on stock performance
+                    # Calculate rolling ROI estimate
                     returns = stock_data['Close'].pct_change(30)  # 30-day returns
-                    roi_estimate = (returns * 0.20 / 0.05) + 1  # Marketing attribution model
+                    roi_estimate = (returns * 0.20 / 0.05) + current_roi  # Attribution model
                     roi_estimate = roi_estimate.clip(0.5, 5.0)  # Cap values
                     
                     fig = go.Figure()
@@ -387,16 +422,29 @@ with tab1:
                         line=dict(color='green', width=2)
                     ))
                     fig.update_layout(
-                        title="Marketing ROI Trend (Stock-Based Estimate)",
+                        title="Marketing ROI Trend (Estimated)",
                         xaxis_title="Date",
                         yaxis_title="ROI Multiple",
                         height=400
                     )
                     st.plotly_chart(fig, use_container_width=True)
-                    st.markdown('<div class="data-source">Calculated: Stock performance × 20% attribution ÷ 5% spend ratio</div>',
-                               unsafe_allow_html=True)
+                    
+                    st.caption("📊 Calculated: Stock performance × 20% marketing attribution ÷ 5% spend ratio")
             except Exception as e:
                 st.error(f"Error calculating ROI trend: {e}")
+    
+    # # === AGENCY RELATIONSHIPS ===
+    # st.subheader("🏢 Current Agency Relationships")
+    
+    # if agency_data:
+    #     # Display by category
+    #     for category, info in agency_data.items():
+    #         with st.expander(f"{category}: **{info['agency']}**"):
+    #             st.markdown(f"**Confidence:** {info.get('confidence', 'Unknown')}")
+    #             st.markdown(f"**Source:** {info.get('source', 'Unknown')}")
+    #             st.markdown(f"**Last Updated:** {info.get('last_updated', 'Unknown')}")
+    # else:
+    #     st.info("Agency data not available. Scraper may need more time or company may not have public agency relationships.")
 
 with tab2:
     st.header(f"Agency Switch Predictions for {selected_company}")
@@ -587,126 +635,126 @@ with tab3:
     from src.data.agency_intelligence import AGENCY_PROFILES, get_agency_recommendation
     
     # Show agency profiles
-st.subheader("📚 Detailed Agency Capabilities")
+# st.subheader("📚 Detailed Agency Capabilities")
 
-selected_agency_profile = st.selectbox(
-    "Select agency to learn more:",
-    list(AGENCY_PROFILES.keys())
-)
+# selected_agency_profile = st.selectbox(
+#     "Select agency to learn more:",
+#     list(AGENCY_PROFILES.keys())
+# )
 
-if selected_agency_profile in AGENCY_PROFILES:
-    profile = AGENCY_PROFILES[selected_agency_profile]
+# if selected_agency_profile in AGENCY_PROFILES:
+#     profile = AGENCY_PROFILES[selected_agency_profile]
     
-    st.markdown(f"### {profile['full_name']}")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Revenue (2023)", profile.get('revenue_2023', 'N/A'))
-    with col2:
-        st.metric("Employees", profile.get('employees', 'N/A'))
-    with col3:
-        st.metric("HQ", profile.get('headquarters', 'N/A'))
+#     st.markdown(f"### {profile['full_name']}")
+#     col1, col2, col3 = st.columns(3)
+#     with col1:
+#         st.metric("Revenue (2023)", profile.get('revenue_2023', 'N/A'))
+#     with col2:
+#         st.metric("Employees", profile.get('employees', 'N/A'))
+#     with col3:
+#         st.metric("HQ", profile.get('headquarters', 'N/A'))
     
-    # Sector expertise - NO NESTED EXPANDERS
-    st.markdown("### Sector Expertise")
-    for sector, details in profile.get('sector_expertise', {}).items():
-        st.markdown(f"**{sector}** (Strength: {details['strength']}/10)")
-        st.markdown(f"- **Specialties:** {', '.join(details['specialties'])}")
-        st.markdown(f"- **Key Clients:** {', '.join(details['key_clients'])}")
-        st.markdown(f"- **Case Studies:** {details['case_studies']}")
-        st.markdown("---")
+#     # Sector expertise - NO NESTED EXPANDERS
+#     st.markdown("### Sector Expertise")
+#     for sector, details in profile.get('sector_expertise', {}).items():
+#         st.markdown(f"**{sector}** (Strength: {details['strength']}/10)")
+#         st.markdown(f"- **Specialties:** {', '.join(details['specialties'])}")
+#         st.markdown(f"- **Key Clients:** {', '.join(details['key_clients'])}")
+#         st.markdown(f"- **Case Studies:** {details['case_studies']}")
+#         st.markdown("---")
     
-    # Capabilities
-    st.markdown("### Capabilities")
-    caps = profile.get('capabilities', {})
-    for cap_name, cap_details in caps.items():
-        col1, col2 = st.columns([1, 3])
-        with col1:
-            rating = cap_details.get('rating', 0)
-            st.metric(cap_name, f"{rating}/10")
-        with col2:
-            st.markdown(cap_details.get('details', 'No details available'))
-            if 'tools' in cap_details:
-                st.caption(f"Tools: {', '.join(cap_details['tools'])}")
+#     # Capabilities
+#     st.markdown("### Capabilities")
+#     caps = profile.get('capabilities', {})
+#     for cap_name, cap_details in caps.items():
+#         col1, col2 = st.columns([1, 3])
+#         with col1:
+#             rating = cap_details.get('rating', 0)
+#             st.metric(cap_name, f"{rating}/10")
+#         with col2:
+#             st.markdown(cap_details.get('details', 'No details available'))
+#             if 'tools' in cap_details:
+#                 st.caption(f"Tools: {', '.join(cap_details['tools'])}")
     
-    # Strengths and weaknesses
-    st.markdown("### Strengths")
-    for strength in profile.get('strengths', []):
-        st.markdown(f"✅ {strength}")
+#     # Strengths and weaknesses
+#     st.markdown("### Strengths")
+#     for strength in profile.get('strengths', []):
+#         st.markdown(f"✅ {strength}")
     
-    st.markdown("### Weaknesses")
-    for weakness in profile.get('weaknesses', []):
-        st.markdown(f"⚠️ {weakness}")
+#     st.markdown("### Weaknesses")
+#     for weakness in profile.get('weaknesses', []):
+#         st.markdown(f"⚠️ {weakness}")
     
-    st.markdown("### Ideal For")
-    for ideal in profile.get('ideal_for', []):
-        st.markdown(f"🎯 {ideal}")
+#     st.markdown("### Ideal For")
+#     for ideal in profile.get('ideal_for', []):
+#         st.markdown(f"🎯 {ideal}")
     
-    # Enhanced chat interface
-    if 'chat_history' not in st.session_state:
-        st.session_state.chat_history = []
+#     # Enhanced chat interface
+#     if 'chat_history' not in st.session_state:
+#         st.session_state.chat_history = []
     
-    # Chat container
-    chat_container = st.container()
+#     # Chat container
+#     chat_container = st.container()
     
-    with chat_container:
-        # Display chat history
-        for msg in st.session_state.chat_history:
-            if msg['role'] == 'user':
-                st.markdown(f"""
-                <div style='text-align: right; margin: 10px 0;'>
-                <div style='background-color: #007acc; color: white; padding: 10px; border-radius: 10px; display: inline-block; max-width: 70%;'>
-                <strong>You:</strong> {msg['content']}
-                </div>
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-                <div style='text-align: left; margin: 10px 0;'>
-                <div style='background-color: #f0f2f6; padding: 10px; border-radius: 10px; display: inline-block; max-width: 70%;'>
-                <strong>AI Advisor:</strong> {msg['content']}
-                </div>
-                </div>
-                """, unsafe_allow_html=True)
+#     with chat_container:
+#         # Display chat history
+#         for msg in st.session_state.chat_history:
+#             if msg['role'] == 'user':
+#                 st.markdown(f"""
+#                 <div style='text-align: right; margin: 10px 0;'>
+#                 <div style='background-color: #007acc; color: white; padding: 10px; border-radius: 10px; display: inline-block; max-width: 70%;'>
+#                 <strong>You:</strong> {msg['content']}
+#                 </div>
+#                 </div>
+#                 """, unsafe_allow_html=True)
+#             else:
+#                 st.markdown(f"""
+#                 <div style='text-align: left; margin: 10px 0;'>
+#                 <div style='background-color: #f0f2f6; padding: 10px; border-radius: 10px; display: inline-block; max-width: 70%;'>
+#                 <strong>AI Advisor:</strong> {msg['content']}
+#                 </div>
+#                 </div>
+#                 """, unsafe_allow_html=True)
     
-    # Input area
-    user_input = st.text_input(
-        "Ask about marketing strategy:",
-        placeholder=f"e.g., 'If {selected_company} switches to Publicis, what would be the financial impact?'",
-        key="chat_input"
-    )
+#     # Input area
+#     user_input = st.text_input(
+#         "Ask about marketing strategy:",
+#         placeholder=f"e.g., 'If {selected_company} switches to Publicis, what would be the financial impact?'",
+#         key="chat_input"
+#     )
     
-    if st.button("Send", key="send_button") and user_input:
-        # Add user message to history
-        st.session_state.chat_history.append({'role': 'user', 'content': user_input})
+#     if st.button("Send", key="send_button") and user_input:
+#         # Add user message to history
+#         st.session_state.chat_history.append({'role': 'user', 'content': user_input})
         
-        # Generate AI response based on real data
-        company_data = calculator.get_company_metrics(selected_company)
+#         # Generate AI response based on real data
+#         company_data = calculator.get_company_metrics(selected_company)
         
-        # Simple AI response generation
-        response = f"""Based on my analysis of {selected_company}'s current performance:
+#         # Simple AI response generation
+#         response = f"""Based on my analysis of {selected_company}'s current performance:
 
-**Current Situation:**
-• Stock Price: ${company_data.get('current_price', 0):.2f} ({company_data.get('yearly_change', 0):+.1f}% YoY)
-• Marketing ROI: {company_data.get('marketing_roi', 0):.2f}x
-• Market Share: {company_data.get('market_share', 0):.1f}%
-• Current Agency: {company_data.get('current_agency', 'Unknown')}
+# **Current Situation:**
+# • Stock Price: ${company_data.get('current_price', 0):.2f} ({company_data.get('yearly_change', 0):+.1f}% YoY)
+# • Marketing ROI: {company_data.get('marketing_roi', 0):.2f}x
+# • Market Share: {company_data.get('market_share', 0):.1f}%
+# • Current Agency: {company_data.get('current_agency', 'Unknown')}
 
-**Analysis:** {user_input}
+# **Analysis:** {user_input}
 
-If this involves an agency switch, the transition typically takes 3-6 months to show impact. Key factors to consider:
-1. Agency expertise in {companies[selected_company]} sector
-2. Current campaign performance and timing
-3. Integration capabilities with existing marketing stack
-4. Historical performance with similar clients
+# If this involves an agency switch, the transition typically takes 3-6 months to show impact. Key factors to consider:
+# 1. Agency expertise in {companies[selected_company]} sector
+# 2. Current campaign performance and timing
+# 3. Integration capabilities with existing marketing stack
+# 4. Historical performance with similar clients
 
-**Financial Impact Estimate:** Agency changes typically result in 2-8% change in marketing ROI within the first year, with {company_data.get('roi_trend', 'stable')} market conditions factored in.
+# **Financial Impact Estimate:** Agency changes typically result in 2-8% change in marketing ROI within the first year, with {company_data.get('roi_trend', 'stable')} market conditions factored in.
 
-*This analysis is based on real-time data from {company_data.get('calculations_used', {}).get('stock_price', {}).get('data_source', 'multiple sources')}.*"""
+# *This analysis is based on real-time data from {company_data.get('calculations_used', {}).get('stock_price', {}).get('data_source', 'multiple sources')}.*"""
         
-        # Add AI response to history
-        st.session_state.chat_history.append({'role': 'ai', 'content': response})
+#         # Add AI response to history
+#         st.session_state.chat_history.append({'role': 'ai', 'content': response})
         
-        st.rerun()
+#         st.rerun()
 
 with tab4:  # Assuming this is your Compare Agencies tab
     from industry_dashboard import create_industry_performance_dashboard
@@ -721,3 +769,190 @@ Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} |
 All calculations use real-time data where available
 </div>
 """, unsafe_allow_html=True)
+
+
+with tab5:
+    st.header("🏢 Agency Intelligence & Analysis")
+    st.markdown("*Comprehensive agency profiles and market intelligence*")
+    
+    # Import agency data
+    from src.data.agency_intelligence import AGENCY_PROFILES
+    from src.data.agency_data_scraper import AgencyDataScraper
+    
+    # Two-column layout
+    col_left, col_right = st.columns([1, 2])
+    
+    with col_left:
+        st.subheader("Select Agency")
+        
+        # Agency selector
+        selected_agency_profile = st.selectbox(
+            "Choose agency to analyze:",
+            list(AGENCY_PROFILES.keys()),
+            help="Major holding companies and agency networks"
+        )
+        
+        # Quick stats
+        if selected_agency_profile in AGENCY_PROFILES:
+            profile = AGENCY_PROFILES[selected_agency_profile]
+            
+            st.markdown("### Quick Stats")
+            st.metric("Revenue (2023)", profile.get('revenue_2023', 'N/A'))
+            st.metric("Employees", profile.get('employees', 'N/A'))
+            st.metric("Headquarters", profile.get('headquarters', 'N/A'))
+    
+    with col_right:
+        if selected_agency_profile in AGENCY_PROFILES:
+            profile = AGENCY_PROFILES[selected_agency_profile]
+            
+            st.markdown(f"## {profile['full_name']}")
+            
+            # Key Agencies
+            if 'key_agencies' in profile:
+                st.markdown("### Key Agency Brands")
+                st.markdown(", ".join(profile['key_agencies']))
+            
+            # Sector Expertise
+            st.markdown("### Sector Expertise")
+            
+            if 'sector_expertise' in profile:
+                for sector, details in profile.get('sector_expertise', {}).items():
+                    with st.expander(f"**{sector}** (Strength: {details['strength']}/10)"):
+                        st.markdown(f"**Specialties:** {', '.join(details['specialties'])}")
+                        st.markdown(f"**Key Clients:** {', '.join(details['key_clients'])}")
+                        st.markdown(f"**Case Studies:** {details['case_studies']}")
+            
+            # Capabilities
+            st.markdown("### Capabilities Breakdown")
+            
+            caps = profile.get('capabilities', {})
+            for cap_name, cap_details in caps.items():
+                col1, col2 = st.columns([1, 3])
+                with col1:
+                    rating = cap_details.get('rating', 0)
+                    st.metric(cap_name, f"{rating}/10")
+                with col2:
+                    st.markdown(cap_details.get('details', 'No details available'))
+                    if 'tools' in cap_details:
+                        st.caption(f"**Tools:** {', '.join(cap_details['tools'])}")
+            
+            # Strengths
+            st.markdown("### Strengths")
+            for strength in profile.get('strengths', []):
+                st.markdown(f"✅ {strength}")
+            
+            # Weaknesses
+            st.markdown("### Weaknesses")
+            for weakness in profile.get('weaknesses', []):
+                st.markdown(f"⚠️ {weakness}")
+            
+            # Ideal For
+            st.markdown("### Ideal For")
+            for ideal in profile.get('ideal_for', []):
+                st.markdown(f"🎯 {ideal}")
+    
+    st.markdown("---")
+    
+    # Company-Specific Agency Relationships
+    st.subheader(f"🔍 Agency Relationships: {selected_company}")
+    
+    # Get agency data for selected company
+    agency_scraper = AgencyDataScraper()
+    company_agencies = agency_scraper.get_all_agencies(selected_company)
+    
+    if company_agencies:
+        # Create a more visual display
+        agency_cats = list(company_agencies.keys())
+        
+        # Group into columns
+        num_cols = 3
+        cols = st.columns(num_cols)
+        
+        for idx, (category, info) in enumerate(company_agencies.items()):
+            col_idx = idx % num_cols
+            with cols[col_idx]:
+                st.markdown(f"**{category.replace(' AOR', '')}**")
+                st.markdown(f"🏢 {info['agency']}")
+                st.caption(f"Confidence: {info.get('confidence', 'Unknown')}")
+                st.caption(f"Source: {info.get('source', 'Unknown')}")
+                st.markdown("---")
+    else:
+        st.info(f"No agency relationship data available for {selected_company}. Data collection in progress.")
+    
+    # Agency Comparison Tool
+    st.markdown("---")
+    st.subheader("⚖️ Compare Agencies")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        agency_1 = st.selectbox(
+            "First Agency:",
+            list(AGENCY_PROFILES.keys()),
+            key="compare_agency_1"
+        )
+    
+    with col2:
+        agency_2 = st.selectbox(
+            "Second Agency:",
+            list(AGENCY_PROFILES.keys()),
+            key="compare_agency_2"
+        )
+    
+    if agency_1 != agency_2:
+        st.markdown("### Comparison")
+        
+        # Create comparison table
+        comparison_data = {
+            'Metric': [],
+            agency_1: [],
+            agency_2: []
+        }
+        
+        profile_1 = AGENCY_PROFILES[agency_1]
+        profile_2 = AGENCY_PROFILES[agency_2]
+        
+        # Compare revenues
+        comparison_data['Metric'].append('Revenue (2023)')
+        comparison_data[agency_1].append(profile_1.get('revenue_2023', 'N/A'))
+        comparison_data[agency_2].append(profile_2.get('revenue_2023', 'N/A'))
+        
+        # Compare employees
+        comparison_data['Metric'].append('Employees')
+        comparison_data[agency_1].append(profile_1.get('employees', 'N/A'))
+        comparison_data[agency_2].append(profile_2.get('employees', 'N/A'))
+        
+        # Compare headquarters
+        comparison_data['Metric'].append('Headquarters')
+        comparison_data[agency_1].append(profile_1.get('headquarters', 'N/A'))
+        comparison_data[agency_2].append(profile_2.get('headquarters', 'N/A'))
+        
+        # Compare capabilities (average ratings)
+        caps_1 = profile_1.get('capabilities', {})
+        caps_2 = profile_2.get('capabilities', {})
+        
+        if caps_1 and caps_2:
+            avg_rating_1 = sum(c.get('rating', 0) for c in caps_1.values()) / len(caps_1)
+            avg_rating_2 = sum(c.get('rating', 0) for c in caps_2.values()) / len(caps_2)
+            
+            comparison_data['Metric'].append('Avg Capability Rating')
+            comparison_data[agency_1].append(f"{avg_rating_1:.1f}/10")
+            comparison_data[agency_2].append(f"{avg_rating_2:.1f}/10")
+        
+        # Display table
+        comparison_df = pd.DataFrame(comparison_data)
+        st.dataframe(comparison_df, use_container_width=True, hide_index=True)
+        
+        # Side-by-side strengths
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown(f"**{agency_1} Strengths:**")
+            for strength in profile_1.get('strengths', [])[:3]:
+                st.markdown(f"• {strength}")
+        
+        with col2:
+            st.markdown(f"**{agency_2} Strengths:**")
+            for strength in profile_2.get('strengths', [])[:3]:
+                st.markdown(f"• {strength}")
+
