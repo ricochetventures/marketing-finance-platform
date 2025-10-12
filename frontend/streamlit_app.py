@@ -836,7 +836,7 @@ with tab2:
             # Methodology explanation
             with st.expander("📚 Prediction Methodology"):
                 st.markdown(f"**Model Used:** {pred['methodology']}")
-                st.markdown(f"**Agency Strength:** {agency_multipliers[selected_agency]['strength']}")
+                st.markdown(f"**Agency Strength:** {agency_data['strength']}")
                 st.markdown("**Calculation Steps:**")
                 st.markdown("1. Analyze historical performance of selected agency")
                 st.markdown("2. Compare with current agency performance")
