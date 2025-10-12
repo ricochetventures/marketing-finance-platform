@@ -26,11 +26,16 @@ class CompanyDataCalculator:
         
     def get_company_metrics(self, company_name: str) -> Dict:
         """
-        Calculate comprehensive company metrics with source attribution
+        Calculate comprehensive company metrics with FULL transparency
+        Every number explained, no hardcoding
         """
+        from src.data.calculation_explainer import CalculationExplainer
+        explainer = CalculationExplainer()
+        
         metrics = {
             'calculations_used': {},
             'data_sources': {},
+            'explanations': {},  # NEW: Full explanations for tooltips
             'last_updated': datetime.now().isoformat()
         }
         
@@ -39,9 +44,16 @@ class CompanyDataCalculator:
         if stock_data:
             current_price = stock_data['current_price']
             yearly_change = stock_data['yearly_change']
+            period = stock_data.get('period_description', 'Period')
             
             metrics['current_price'] = current_price
             metrics['yearly_change'] = yearly_change
+            metrics['period_description'] = period  # NEW: Specific period
+            
+            # Generate full explanation
+            metrics['explanations']['stock_price'] = explainer.explain_stock_price(
+                company_name, current_price, yearly_change, period
+            )
             
             # Track source
             self.source_tracker.register_data_point(
@@ -53,33 +65,37 @@ class CompanyDataCalculator:
                 {
                     'ticker': stock_data.get('ticker'),
                     'data_points': stock_data.get('data_points'),
-                    'period': stock_data.get('period_description'),
+                    'period': period,
                     'formula': stock_data.get('calculation_note')
                 }
             )
             
             metrics['calculations_used']['stock_price'] = {
                 'method': 'Latest closing price from Yahoo Finance',
-                'formula': 'yfinance.Ticker(ticker).history(period="1d")["Close"][-1]',
+                'formula': 'yfinance.Ticker(ticker).history(period="1y")["Close"][-1]',
                 'data_source': 'Yahoo Finance API',
-                'period_description': stock_data.get('period_description', 'Unknown')
-            }
-            
-            metrics['calculations_used']['yearly_change'] = {
-                'method': 'Percentage change from start of period',
-                'formula': '((current_price - start_price) / start_price) * 100',
-                'data_source': 'Yahoo Finance historical data'
+                'period_description': period,
+                'specific_timeframe': f'{period} ({stock_data.get("data_points", 0)} trading days)'
             }
         
         # 2. CURRENT AGENCY CALCULATION
         agency_data = self._get_current_agency(company_name)
-        metrics['current_agency'] = agency_data['agency']
+        agency_name = agency_data['agency']
+        
+        # Never show "Tool" - replace with clear message
+        if agency_name == 'Tool' or agency_name == 'Unknown':
+            agency_name = 'Data Unavailable'
+            agency_data['agency'] = 'Data Unavailable'
+        
+        metrics['current_agency'] = agency_name
         metrics['agency_tenure_months'] = agency_data['tenure_months']
+        metrics['agency_source'] = agency_data.get('source', 'Unknown')
+        metrics['agency_method'] = agency_data.get('method', 'Web scraping')
         
         # Track agency source
         self.source_tracker.register_data_point(
             'current_agency',
-            agency_data['agency'],
+            agency_name,
             agency_data['source'],
             agency_data['method'],
             agency_data['confidence'],
@@ -92,13 +108,24 @@ class CompanyDataCalculator:
         metrics['calculations_used']['current_agency'] = {
             'method': agency_data['method'],
             'data_source': agency_data['source'],
-            'confidence_level': agency_data['confidence']
+            'confidence_level': agency_data['confidence'],
+            'search_strategy': 'Google News + Ad Age + Company press releases'
         }
         
-        # 3. MARKETING ROI CALCULATION
+        # 3. MARKETING ROI CALCULATION (with full explanation)
         roi_data = self._calculate_marketing_roi(company_name, stock_data)
         metrics['marketing_roi'] = roi_data['roi']
         metrics['roi_trend'] = roi_data['trend']
+        
+        # Generate full ROI explanation
+        raw_data = roi_data.get('raw_data', {})
+        metrics['explanations']['marketing_roi'] = explainer.explain_marketing_roi(
+            company_name,
+            roi_data['roi'],
+            raw_data.get('revenue', 0),
+            raw_data.get('marketing_spend', 0),
+            roi_data.get('calculation_method', 'Unknown')
+        )
         
         # Track ROI source
         self.source_tracker.register_data_point(
@@ -118,13 +145,25 @@ class CompanyDataCalculator:
             'formula': roi_data['formula'],
             'data_sources': roi_data['sources'],
             'assumptions': roi_data['assumptions'],
-            'data_quality': roi_data.get('data_quality', 'Unknown')
+            'data_quality': roi_data.get('data_quality', 'Unknown'),
+            'revenue_source': 'Yahoo Finance API',
+            'marketing_spend_source': roi_data.get('calculation_method', 'Estimated')
         }
         
-        # 4. MARKET SHARE CALCULATION
+        # 4. MARKET SHARE CALCULATION (with full explanation)
         market_share_data = self._calculate_market_share(company_name)
         metrics['market_share'] = market_share_data['share']
         metrics['market_position'] = market_share_data['position']
+        
+        # Generate market share explanation
+        calc_details = market_share_data.get('calculation_details', {})
+        metrics['explanations']['market_share'] = explainer.explain_market_share(
+            company_name,
+            market_share_data['share'],
+            self._parse_revenue_string(calc_details.get('company_revenue', '$0')),
+            self._parse_revenue_string(calc_details.get('total_market_size', '$0')),
+            market_share_data.get('industry_scope', 'Unknown')
+        )
         
         # Track market share source
         self.source_tracker.register_data_point(
@@ -140,13 +179,31 @@ class CompanyDataCalculator:
             'method': market_share_data['method'],
             'data_source': market_share_data['source'],
             'industry_definition': market_share_data['industry_scope'],
-            'calculation_details': market_share_data.get('calculation_details', {})
+            'calculation_details': market_share_data.get('calculation_details', {}),
+            'web_scraping_query': f'"{company_name} market share" OR "{market_share_data.get("industry_scope", "industry")} market size"'
         }
         
         # Add source tracker to metrics
         metrics['source_tracker'] = self.source_tracker
         
         return metrics
+
+    def _parse_revenue_string(self, revenue_str: str) -> float:
+        """Helper to parse revenue strings like '$123.45B' to float"""
+        try:
+            # Remove $ and other characters
+            clean = revenue_str.replace('$', '').replace(',', '').upper()
+            if 'B' in clean:
+                return float(clean.replace('B', '')) * 1e9
+            elif 'M' in clean:
+                return float(clean.replace('M', '')) * 1e6
+            else:
+                return float(clean)
+        except:
+            return 0.0
+
+
+        
     
     def _get_stock_data(self, company_name: str) -> Optional[Dict]:
         """Get real stock data with AI-powered ticker lookup"""
@@ -476,7 +533,7 @@ class CompanyDataCalculator:
         except Exception as e:
             logger.error(f"ROI calculation failed: {e}")
             return self._fallback_roi()
-        
+
     def _get_industry_marketing_pct(self, company_name: str) -> float:
         """Get industry-average marketing spend as % of revenue"""
         

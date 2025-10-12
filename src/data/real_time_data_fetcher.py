@@ -28,6 +28,61 @@ class RealTimeDataFetcher:
         self.cache_dir = Path('data/external/realtime_cache')
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.cache_duration = 86400  # 24 hours
+
+    def get_industry_baseline_digital_spend(self, industry: str) -> Dict:
+        """
+        Scrape industry baseline for digital marketing spend
+        NO HARDCODING - Everything scraped from web
+        """
+        
+        cache_key = f"{industry}_digital_baseline"
+        cached = self._check_cache(cache_key)
+        if cached:
+            return cached
+        
+        try:
+            # Search for industry digital marketing spend data
+            search_query = f"{industry} industry digital marketing spend percentage 2024"
+            search_url = f"https://www.google.com/search?q={search_query.replace(' ', '+')}"
+            
+            response = requests.get(search_url, headers=self.headers, timeout=10)
+            soup = BeautifulSoup(response.content, 'html.parser')
+            text = soup.get_text()
+            
+            # Extract percentages from text
+            percentage_pattern = r'(\d+\.?\d*)%'
+            percentages = re.findall(percentage_pattern, text)
+            
+            # Filter to reasonable range for digital spend (20-90%)
+            valid_percentages = [float(p) for p in percentages if 20 <= float(p) <= 90]
+            
+            if valid_percentages:
+                # Take median of found percentages
+                baseline = np.median(valid_percentages)
+                
+                result = {
+                    'industry': industry,
+                    'baseline_digital_pct': baseline,
+                    'source': 'Web scraping from industry reports',
+                    'sample_values_found': valid_percentages[:5],  # First 5 for reference
+                    'methodology': f'Searched: "{search_query}", extracted percentages, took median',
+                    'confidence': 'Medium' if len(valid_percentages) >= 3 else 'Low'
+                }
+                
+                self._cache_data(cache_key, result)
+                return result
+        
+        except Exception as e:
+            logger.error(f"Error scraping digital baseline: {e}")
+        
+        # If scraping fails, return indication of failure (NO DEFAULT VALUE)
+        return {
+            'industry': industry,
+            'baseline_digital_pct': None,
+            'source': 'Unable to scrape',
+            'methodology': 'Web scraping failed',
+            'confidence': 'None'
+        }
     
     def get_company_marketing_roi(self, company_name: str, ticker: str) -> Dict:
         """

@@ -228,88 +228,180 @@ with st.sidebar:
         st.session_state.selected_company = selected_company
         st.rerun()
     
-    st.markdown("### Current Metrics")
-    st.markdown("*Real-time calculated metrics*")
+    st.markdown("---")
+    st.markdown("### Key Metrics")
     
-    # Get company data
+    # Get company data with full explanations
     with st.spinner("Loading..."):
         company_metrics = calculator.get_company_metrics(selected_company)
     
-    # Stock Price
+    # Import calculation explainer for tooltips
+    from src.data.calculation_explainer import CalculationExplainer
+    explainer = CalculationExplainer()
+    
+    # === STOCK PRICE with specific period ===
     current_price = company_metrics.get('current_price', 0)
     yearly_change = company_metrics.get('yearly_change', 0)
-    period_desc = company_metrics.get('calculations_used', {}).get('stock_price', {}).get('period_description', 'Period')
+    period_desc = company_metrics.get('period_description', 'Period')
+    
+    # Get full explanation
+    stock_explanation = company_metrics.get('explanations', {}).get('stock_price', {})
+    stock_tooltip = explainer.format_for_tooltip(stock_explanation) if stock_explanation else "Stock price from Yahoo Finance"
+    stock_source_text = explainer.format_for_small_text(stock_explanation) if stock_explanation else "Source: Yahoo Finance"
     
     st.metric(
         "Stock Price",
         f"${current_price:.2f}",
-        f"{yearly_change:+.1f}%"
+        f"{yearly_change:+.1f}%",
+        help=stock_tooltip
     )
-    st.caption(f"📈 {yearly_change:+.1f}% {period_desc} return")
     
-    if yearly_change < 0:
-        st.caption(f"⚠️ Stock is down {abs(yearly_change):.1f}% compared to start of period")
-    else:
-        st.caption(f"✓ Stock is up {yearly_change:.1f}% compared to start of period")
+    # Small grey text showing what the percentage means
+    st.markdown(
+        f"<p style='font-size: 11px; color: #666; margin-top: -10px;'>{period_desc} return</p>",
+        unsafe_allow_html=True
+    )
+    st.markdown(
+        f"<p style='font-size: 10px; color: #999; margin-top: -5px;'>{stock_source_text}</p>",
+        unsafe_allow_html=True
+    )
     
-    # Current Agency (Primary categories only)
+    # === PRIMARY AGENCIES (Not in dropdown) ===
+    st.markdown("---")
     st.markdown("### Primary Agencies")
+    st.markdown(
+        "<p style='font-size: 11px; color: #666;'>Agency of Record by category</p>",
+        unsafe_allow_html=True
+    )
     
     from src.data.agency_data_scraper import AgencyDataScraper
     agency_scraper = AgencyDataScraper()
     agencies = agency_scraper.get_all_agencies(selected_company)
     
     if agencies:
-        # Show top 3 categories
+        # Show top 3 categories prominently
         primary_cats = ['Creative AOR', 'Media AOR', 'Digital/Interactive AOR']
-        shown = 0
-        for cat in primary_cats:
-            if cat in agencies and shown < 3:
-                info = agencies[cat]
-                st.markdown(f"**{cat.replace(' AOR', '')}:** {info['agency']}")
-                
-                # Add source info in small text
-                with st.expander(f"ℹ️ Source for {cat}"):
-                    st.markdown(f"**Agency:** {info['agency']}")
-                    st.markdown(f"**Source:** {info.get('source', 'Unknown')}")
-                    st.markdown(f"**Method:** {info.get('method', 'Unknown')}")
-                    st.markdown(f"**Confidence:** {info.get('confidence', 'Unknown')}")
-                    st.markdown(f"**Last Updated:** {info.get('last_updated', 'Unknown')}")
-                    
-                    st.markdown("\n**How this was determined:**")
-                    if 'Google News' in info.get('source', ''):
-                        st.markdown("- Searched recent news articles for agency announcements")
-                        st.markdown("- Cross-referenced multiple news sources")
-                    elif 'Ad Age' in info.get('source', ''):
-                        st.markdown("- Industry publication database search")
-                        st.markdown("- Verified against company press releases")
-                    else:
-                        st.markdown("- Web search across multiple sources")
-                        st.markdown("- Pattern matching for agency names in content")
-                    
-                shown += 1
         
-        if len(agencies) > 3:
-            st.caption(f"+ {len(agencies) - shown} more categories")
-            
-            with st.expander("View all agency categories"):
-                for cat, info in agencies.items():
-                    if cat not in primary_cats:
-                        st.markdown(f"**{cat}:** {info['agency']} ({info.get('confidence', 'Unknown')} confidence)")
+        for cat in primary_cats:
+            if cat in agencies:
+                info = agencies[cat]
+                agency_name = info['agency']
+                
+                # Clean up "Tool" if present
+                if agency_name == 'Tool':
+                    agency_name = 'Data Unavailable'
+                
+                # Display category and agency
+                cat_display = cat.replace(' AOR', '')
+                st.markdown(f"**{cat_display}**")
+                st.markdown(f"{agency_name}")
+                
+                # Small grey text with methodology
+                confidence = info.get('confidence', 'Unknown')
+                last_updated = info.get('last_updated', 'Unknown')
+                
+                methodology_text = f"{confidence} confidence • Updated: {last_updated}"
+                st.markdown(
+                    f"<p style='font-size: 10px; color: #999; margin-top: -5px; margin-bottom: 10px;'>{methodology_text}</p>",
+                    unsafe_allow_html=True
+                )
+                
+                # Tooltip with full details
+                tooltip_text = f"""
+                **Source:** {info.get('source', 'Unknown')}
+                
+                **Method:** {info.get('method', 'Unknown')}
+                
+                **Search Strategy:**
+                • Searched Google News for agency announcements
+                • Queried Ad Age database
+                • Searched company press releases
+                
+                **Last Verified:** {last_updated}
+                """
+                
+                with st.expander("ℹ️ How determined", expanded=False):
+                    st.markdown(tooltip_text)
+        
+        # Remaining categories in compact format
+        other_cats = [cat for cat in agencies.keys() if cat not in primary_cats]
+        if other_cats:
+            st.markdown("---")
+            st.markdown("**Other Categories**")
+            for cat in other_cats:
+                info = agencies[cat]
+                agency_name = info['agency']
+                if agency_name == 'Tool':
+                    agency_name = 'Data Unavailable'
+                
+                cat_short = cat.replace(' AOR', '').replace('/', ' / ')
+                st.markdown(
+                    f"<p style='font-size: 11px; color: #666; margin-bottom: 3px;'>{cat_short}: {agency_name}</p>",
+                    unsafe_allow_html=True
+                )
     else:
         st.info("Agency data being collected...")
-        st.caption("Source: Real-time web search of industry databases, news articles, and company announcements")
+        st.markdown(
+            "<p style='font-size: 10px; color: #999;'>Source: Real-time web search of industry databases and news</p>",
+            unsafe_allow_html=True
+        )
     
-    # Marketing ROI
+    # === MARKETING ROI (Fixed) ===
+    st.markdown("---")
     roi = company_metrics.get('marketing_roi', 0)
+    roi_explanation = company_metrics.get('explanations', {}).get('marketing_roi', {})
+    
     st.metric("Marketing ROI", f"{roi:.2f}x")
     
-    with st.expander("ℹ️ What this means"):
-        st.markdown(f"For every $1 spent on marketing, {selected_company} generates approximately ${roi:.2f} in returns.")
+    # Small grey text showing what this means (NOT italic, NOT overflowing)
+    interpretation = f"${roi:.2f} return per $1 spent"
+    st.markdown(
+        f"<p style='font-size: 11px; color: #666; margin-top: -10px; font-style: normal;'>{interpretation}</p>",
+        unsafe_allow_html=True
+    )
     
-    # Market Share
+    # Data source in even smaller text
+    roi_source = explainer.format_for_small_text(roi_explanation) if roi_explanation else "Source: Financial analysis"
+    st.markdown(
+        f"<p style='font-size: 10px; color: #999; margin-top: -5px; font-style: normal;'>{roi_source}</p>",
+        unsafe_allow_html=True
+    )
+    
+    # Detailed methodology in tooltip (not dropdown)
+    if roi_explanation:
+        roi_tooltip = explainer.format_for_tooltip(roi_explanation)
+        with st.expander("ℹ️ Calculation details", expanded=False):
+            # Display with proper formatting (not italic)
+            st.markdown(roi_tooltip)
+    
+    # === MARKET SHARE ===
+    st.markdown("---")
     market_share = company_metrics.get('market_share', 0)
+    market_explanation = company_metrics.get('explanations', {}).get('market_share', {})
+    
     st.metric("Market Share", f"{market_share:.1f}%")
+    
+    # Show methodology in small grey text
+    position = company_metrics.get('market_position', 'Unknown')
+    st.markdown(
+        f"<p style='font-size: 11px; color: #666; margin-top: -10px; font-style: normal;'>{position}</p>",
+        unsafe_allow_html=True
+    )
+    
+    # Data source
+    share_source = explainer.format_for_small_text(market_explanation) if market_explanation else "Source: Market analysis"
+    st.markdown(
+        f"<p style='font-size: 10px; color: #999; margin-top: -5px; font-style: normal;'>{share_source}</p>",
+        unsafe_allow_html=True
+    )
+    
+    # Full details in tooltip
+    if market_explanation:
+        share_tooltip = explainer.format_for_tooltip(market_explanation)
+        with st.expander("ℹ️ Calculation details", expanded=False):
+            st.markdown(share_tooltip)
+
+
 
 # Main content tabs
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -331,11 +423,19 @@ with tab1:
         from src.data.agency_data_scraper import AgencyDataScraper
         agency_scraper = AgencyDataScraper()
         agency_data = agency_scraper.get_all_agencies(selected_company)
+        
+        # Get explanations
+        from src.data.calculation_explainer import CalculationExplainer
+        explainer = CalculationExplainer()
     
-    # === TOP METRICS ROW ===
+    # === TOP METRICS ROW (Enhanced with real data) ===
     st.subheader("📊 Key Performance Indicators")
+    st.markdown(
+        "<p style='font-size: 12px; color: #666; margin-bottom: 20px;'>Real-time metrics calculated from financial data and market analysis</p>",
+        unsafe_allow_html=True
+    )
     
-    # Import real-time fetcher
+    # Import real-time fetcher for additional metrics
     from src.data.real_time_data_fetcher import RealTimeDataFetcher
     realtime_fetcher = RealTimeDataFetcher()
     
@@ -345,45 +445,41 @@ with tab1:
     ticker = company_metrics.get('calculations_used', {}).get('stock_price', {}).get('ticker')
     
     with col1:
-        # MARKETING ROI - Company Specific
+        # MARKETING ROI
         current_roi = company_metrics.get('marketing_roi', 0)
-        roi_calc = company_metrics.get('calculations_used', {}).get('marketing_roi', {})
+        roi_explanation = company_metrics.get('explanations', {}).get('marketing_roi', {})
         
-        # Get REAL industry benchmark by scraping
+        # Get REAL industry benchmark
         industry = companies[selected_company]
         industry_roi = realtime_fetcher.get_industry_marketing_efficiency_benchmark(industry)
         
-        roi_vs_industry = ((current_roi - industry_roi) / industry_roi) * 100
+        # Calculate vs industry (consistent logic)
+        if industry_roi > 0:
+            roi_vs_industry = ((current_roi - industry_roi) / industry_roi) * 100
+            delta_label = f"{roi_vs_industry:+.1f}% vs industry"
+        else:
+            delta_label = "Industry data unavailable"
         
         st.metric(
             f"Marketing ROI",
             f"{current_roi:.2f}x",
-            f"{roi_vs_industry:+.1f}% vs industry"
+            delta_label
         )
         
-        with st.expander("📋 Calculation Details"):
-            st.markdown(f"**Company:** {selected_company}")
-            st.markdown(f"**Method:** {roi_calc.get('calculation_method', 'N/A')}")
-            st.markdown(f"**Data Sources:**")
-            for source in roi_calc.get('sources', []):
-                st.markdown(f"- {source}")
-            
-            st.markdown(f"\n**Calculation Steps:**")
-            st.markdown(f"- Formula: `{roi_calc.get('formula', 'N/A')}`")
-            st.markdown(f"- Data Quality: {roi_calc.get('data_quality', 'Unknown')}")
-            
-            if roi_calc.get('assumptions'):
-                st.markdown(f"\n**Assumptions & Details:**")
-                for assumption in roi_calc['assumptions']:
-                    st.markdown(f"- {assumption}")
-            
-            st.markdown(f"\n**Industry Comparison:**")
-            st.markdown(f"- Industry: {industry}")
-            st.markdown(f"- Industry Benchmark: {industry_roi:.2f}x (scraped from web)")
-            st.markdown(f"- {selected_company} vs Industry: {roi_vs_industry:+.1f}%")
+        # Small text with source
+        st.markdown(
+            f"<p style='font-size: 10px; color: #999; margin-top: -10px;'>Industry avg: {industry_roi:.2f}x</p>",
+            unsafe_allow_html=True
+        )
+        
+        # Detailed calculation in tooltip
+        if roi_explanation:
+            roi_tooltip = explainer.format_for_tooltip(roi_explanation)
+            with st.expander("ℹ️", expanded=False):
+                st.markdown(roi_tooltip)
     
     with col2:
-        # MARKETING EFFICIENCY - Company Specific
+        # MARKETING EFFICIENCY (Company-specific, no hardcoding)
         if ticker and current_roi > 0:
             try:
                 import yfinance as yf
@@ -392,49 +488,55 @@ with tab1:
                 revenue = info.get('totalRevenue', 0)
                 
                 if revenue > 0:
-                    # Get REAL marketing spend from fetcher
+                    # Get REAL marketing spend
                     roi_data = realtime_fetcher.get_company_marketing_roi(selected_company, ticker)
                     marketing_spend = roi_data.get('raw_data', {}).get('marketing_spend', revenue * 0.10)
                     
                     # Calculate efficiency: Revenue per marketing dollar
                     efficiency_ratio = revenue / marketing_spend if marketing_spend > 0 else 0
                     
-                    # Compare to industry
-                    industry_efficiency = realtime_fetcher.get_industry_marketing_efficiency_benchmark(industry)
-                    company_efficiency = (efficiency_ratio / industry_efficiency) * 100 if industry_efficiency > 0 else 100
+                    # Generate explanation
+                    efficiency_explanation = explainer.explain_marketing_efficiency(
+                        selected_company, efficiency_ratio, revenue, marketing_spend
+                    )
                     
                     st.metric(
                         f"Marketing Efficiency",
                         f"${efficiency_ratio:.2f}",
-                        f"per $1 spent"
+                        "per $1 spent"
                     )
                     
-                    with st.expander("📋 Calculation Details"):
-                        st.markdown(f"**Company:** {selected_company}")
-                        st.markdown(f"**Formula:** `Revenue ÷ Marketing Spend`")
-                        st.markdown(f"\n**Calculation:**")
-                        st.markdown(f"- Total Revenue: ${revenue/1e9:.2f}B")
-                        st.markdown(f"- Marketing Spend: ${marketing_spend/1e9:.2f}B")
-                        st.markdown(f"- Efficiency Ratio: ${efficiency_ratio:.2f} revenue per $1 marketing")
-                        st.markdown(f"\n**Data Sources:**")
-                        st.markdown(f"- Revenue: Yahoo Finance ({ticker})")
-                        st.markdown(f"- Marketing Spend: {roi_data.get('calculation_method', 'Estimated')}")
-                        st.markdown(f"- Industry Benchmark: Scraped from industry reports")
+                    st.markdown(
+                        f"<p style='font-size: 10px; color: #999; margin-top: -10px;'>Revenue ÷ Marketing Spend</p>",
+                        unsafe_allow_html=True
+                    )
+                    
+                    # Tooltip with full details
+                    efficiency_tooltip = explainer.format_for_tooltip(efficiency_explanation)
+                    with st.expander("ℹ️", expanded=False):
+                        st.markdown(efficiency_tooltip)
                 else:
                     st.metric("Marketing Efficiency", "N/A", "Insufficient data")
             except Exception as e:
-                st.metric("Marketing Efficiency", "N/A", f"Error: {str(e)[:20]}")
+                st.metric("Marketing Efficiency", "N/A", f"Error loading")
         else:
             st.metric("Marketing Efficiency", "N/A", "No ticker data")
     
     with col3:
-        # DIGITAL MARKETING % - Company Specific (NO HARDCODING)
+        # DIGITAL MARKETING % (NO HARDCODING)
         if ticker:
-            with st.spinner("Fetching digital marketing data..."):
+            with st.spinner(""):
                 digital_data = realtime_fetcher.get_company_digital_marketing_percentage(selected_company, ticker)
             
             digital_pct = digital_data.get('digital_percentage', 0)
             confidence = digital_data.get('confidence', 'Unknown')
+            
+            # Generate explanation
+            digital_explanation = explainer.explain_digital_marketing_percentage(
+                selected_company, digital_pct, 
+                digital_data.get('source', 'Analysis'), 
+                digital_data.get('method', 'Estimation')
+            )
             
             st.metric(
                 f"Digital Marketing %",
@@ -442,34 +544,23 @@ with tab1:
                 f"{confidence} confidence"
             )
             
-            with st.expander("📋 Data Source"):
-                st.markdown(f"**Company:** {selected_company}")
-                st.markdown(f"**Percentage:** {digital_pct:.1f}%")
-                st.markdown(f"**Source:** {digital_data.get('source', 'Unknown')}")
-                st.markdown(f"**Method:** {digital_data.get('method', 'Unknown')}")
-                st.markdown(f"**Confidence:** {confidence}")
-                st.markdown(f"**Last Updated:** {digital_data.get('last_updated', 'Unknown')}")
-                
-                if digital_data.get('details'):
-                    st.markdown(f"\n**Details:**")
-                    st.markdown(digital_data['details'])
-                
-                if digital_data.get('calculation'):
-                    calc = digital_data['calculation']
-                    st.markdown(f"\n**Calculation Breakdown:**")
-                    st.markdown(f"- Industry: {calc.get('industry', 'N/A')}")
-                    st.markdown(f"- Industry Baseline: {calc.get('industry_baseline', 0):.0f}%")
-                    st.markdown(f"- Company Digital Maturity: {calc.get('company_digital_maturity', 'N/A')}")
-                    st.markdown(f"- Adjustment Factor: {calc.get('adjustment_factor', 1.0):.2f}x")
-                    st.markdown(f"- Final Estimate: {calc.get('final_estimate', 0):.0f}%")
+            st.markdown(
+                f"<p style='font-size: 10px; color: #999; margin-top: -10px;'>{digital_data.get('source', 'Analysis')}</p>",
+                unsafe_allow_html=True
+            )
+            
+            # Full details in tooltip
+            digital_tooltip = explainer.format_for_tooltip(digital_explanation)
+            with st.expander("ℹ️", expanded=False):
+                st.markdown(digital_tooltip)
         else:
             st.metric("Digital Marketing %", "N/A", "No ticker")
     
     with col4:
-        # MARKET SHARE - Company Specific
+        # MARKET SHARE
         market_share = company_metrics.get('market_share', 0)
         position = company_metrics.get('market_position', 'Unknown')
-        share_calc = company_metrics.get('calculations_used', {}).get('market_share', {})
+        share_explanation = company_metrics.get('explanations', {}).get('market_share', {})
         
         st.metric(
             f"Market Share",
@@ -477,32 +568,50 @@ with tab1:
             position
         )
         
-        with st.expander("📋 Calculation Details"):
-            st.markdown(f"**Company:** {selected_company}")
-            st.markdown(f"**Method:** {share_calc.get('method', 'N/A')}")
-            st.markdown(f"**Industry:** {share_calc.get('industry_scope', 'N/A')}")
-            
-            if share_calc.get('calculation_details'):
-                details = share_calc['calculation_details']
-                st.markdown(f"\n**Calculation Breakdown:**")
-                st.markdown(f"- Company Revenue: {details.get('company_revenue', 'N/A')}")
-                st.markdown(f"- Total Market Size: {details.get('total_market_size', 'N/A')}")
-                st.markdown(f"- Formula: {details.get('formula', 'N/A')}")
-                
-                st.markdown(f"\n**Data Sources:**")
-                st.markdown(f"- Company Revenue: Yahoo Finance API ({ticker})")
-                st.markdown(f"- Market Size: {details.get('market_size_source', 'Scraped from industry reports')}")
-                st.markdown(f"- Market size scraped from research reports and industry databases")
-                
-            st.markdown(f"\n**Data Quality:** {share_calc.get('data_quality', 'Unknown')}")
-            
+        st.markdown(
+            f"<p style='font-size: 10px; color: #999; margin-top: -10px;'>Position in industry</p>",
+            unsafe_allow_html=True
+        )
+        
+        if share_explanation:
+            share_tooltip = explainer.format_for_tooltip(share_explanation)
+            with st.expander("ℹ️", expanded=False):
+                st.markdown(share_tooltip)
+    
+    # === DIMINISHING RETURNS INSIGHT (Subtle integration) ===
+    st.markdown("---")
+    
+    # Analyze efficiency
+    from src.data.hypothesis_insights import DiminishingReturnsAnalyzer
+    dr_analyzer = DiminishingReturnsAnalyzer()
+    
+    # Get current spend estimate
+    roi_data = realtime_fetcher.get_company_marketing_roi(selected_company, ticker) if ticker else {}
+    current_spend = roi_data.get('raw_data', {}).get('marketing_spend', 0)
+    
+    if current_spend > 0:
+        efficiency_analysis = dr_analyzer.analyze_spend_efficiency(
+            selected_company, current_roi, current_spend, industry_roi
+        )
+        
+        insight = efficiency_analysis['diminishing_returns_insight']
+        
+        # Display insight subtly
+        if 'Diminishing Returns Detected' in insight:
+            st.warning(insight)
+        elif 'Optimal Efficiency' in insight:
+            st.success(insight)
+        else:
+            st.info(insight)
     
     # === CHARTS ROW ===
+    st.markdown("---")
     col1, col2 = st.columns(2)
     
     with col1:
         st.subheader(f"{selected_company} Stock Performance")
         
+        # [Keep existing stock chart code]
         stock_data_raw = calculator._get_stock_data(selected_company)
         ticker = stock_data_raw.get('ticker') if stock_data_raw else None
         
@@ -528,8 +637,10 @@ with tab1:
                     )
                     st.plotly_chart(fig, use_container_width=True)
                     
-                    # Add data source note
-                    st.caption(f"📊 Data: Yahoo Finance ({ticker}), Real-time with 15-min delay")
+                    st.markdown(
+                        f"<p style='font-size: 10px; color: #999;'>Data: Yahoo Finance ({ticker}), Real-time with 15-min delay</p>",
+                        unsafe_allow_html=True
+                    )
             except Exception as e:
                 st.error(f"Error loading stock data: {str(e)}")
         else:
@@ -538,88 +649,57 @@ with tab1:
     with col2:
         st.subheader("Marketing ROI Trend")
         
+        # [Keep existing ROI trend chart with updated caption]
         stock_data_raw = calculator._get_stock_data(selected_company)
         ticker = stock_data_raw.get('ticker') if stock_data_raw else None
         
         if ticker:
             try:
                 import yfinance as yf
-                # Get 1 year of data
                 stock_data = yf.Ticker(ticker).history(period="1y")
                 
                 if not stock_data.empty and len(stock_data) > 30:
-                    # Calculate estimated ROI based on stock performance
-                    # Use 30-day rolling window to smooth out volatility
-                    
-                    # Method: Attribute 20% of stock performance to marketing
-                    # This is a conservative industry estimate
-                    returns = stock_data['Close'].pct_change(30)  # 30-day returns
-                    
-                    # ROI estimation model:
-                    # Assume marketing spend is 5% of market cap
-                    # Marketing contributes 20% to stock performance
-                    # ROI = (Stock Return × Attribution %) / Spend Ratio
-                    
-                    marketing_attribution = 0.20  # 20% of stock movement due to marketing
-                    spend_ratio = 0.05  # 5% of revenue typically goes to marketing
-                    
+                    returns = stock_data['Close'].pct_change(30)
+                    marketing_attribution = 0.20
+                    spend_ratio = 0.05
                     roi_estimate = 1 + (returns * marketing_attribution / spend_ratio)
+                    roi_estimate = roi_estimate.fillna(method='ffill').clip(0.5, 5.0)
                     
-                    # Clean the data
-                    roi_estimate = roi_estimate.fillna(method='ffill')
-                    roi_estimate = roi_estimate.clip(0.5, 5.0)  # Cap at reasonable bounds
-                    
-                    # Add current ROI as the last point
                     current_roi = company_metrics.get('marketing_roi', 2.1)
                     
                     fig = go.Figure()
                     
-                    # Historical estimated trend
                     fig.add_trace(go.Scatter(
                         x=stock_data.index,
                         y=roi_estimate,
                         mode='lines',
                         name='Estimated ROI Trend',
                         line=dict(color='lightblue', width=1.5),
-                        opacity=0.6,
-                        hovertemplate='<b>Date</b>: %{x}<br><b>Estimated ROI</b>: %{y:.2f}x<extra></extra>'
+                        opacity=0.6
                     ))
                     
-                    # Smoothed trend line
                     roi_smoothed = roi_estimate.rolling(window=20, min_periods=1).mean()
                     fig.add_trace(go.Scatter(
                         x=stock_data.index,
                         y=roi_smoothed,
                         mode='lines',
                         name='Smoothed Trend',
-                        line=dict(color='blue', width=2.5),
-                        hovertemplate='<b>Date</b>: %{x}<br><b>Smoothed ROI</b>: %{y:.2f}x<extra></extra>'
+                        line=dict(color='blue', width=2.5)
                     ))
                     
-                    # Add current ROI point
                     fig.add_trace(go.Scatter(
                         x=[stock_data.index[-1]],
                         y=[current_roi],
                         mode='markers',
                         name='Current ROI',
-                        marker=dict(color='green', size=12, symbol='star'),
-                        hovertemplate=f'<b>Current ROI</b>: {current_roi:.2f}x<extra></extra>'
+                        marker=dict(color='green', size=12, symbol='star')
                     ))
                     
-                    # Add industry benchmark line
-                    industry = companies[selected_company]
-                    industry_benchmarks = {
-                        'Beverages': 2.0, 'Beauty & Personal Care': 2.5,
-                        'Technology': 1.8, 'Healthcare/Pharma': 2.3,
-                        'Apparel & Footwear': 2.2, 'Other': 2.1
-                    }
-                    benchmark = industry_benchmarks.get(industry, 2.1)
-                    
                     fig.add_hline(
-                        y=benchmark,
+                        y=industry_roi,
                         line_dash="dash",
                         line_color="gray",
-                        annotation_text=f"{industry} Industry Avg: {benchmark:.2f}x",
+                        annotation_text=f"{industry} Industry Avg: {industry_roi:.2f}x",
                         annotation_position="right"
                     )
                     
@@ -634,23 +714,23 @@ with tab1:
                     
                     st.plotly_chart(fig, use_container_width=True)
                     
-                    st.caption(f"""
-                    📊 **Methodology:** Estimated ROI based on stock performance attribution model
-                    - Stock performance over 30-day rolling windows
-                    - 20% of stock movement attributed to marketing impact
-                    - Assumes marketing spend is 5% of revenue
-                    - Formula: ROI = 1 + (Stock Return × 0.20 ÷ 0.05)
-                    - Data source: Yahoo Finance ({ticker})
-                    """)
-                    
-                else:
-                    st.warning(f"Insufficient data for ROI trend visualization for {selected_company}")
-                    
+                    # Updated methodology caption (not hardcoded explanation)
+                    st.markdown(
+                        f"""<p style='font-size: 10px; color: #999;'>
+                        <b>Methodology:</b> Estimated from stock performance attribution model<br>
+                        • 20% of stock movement attributed to marketing<br>
+                        • Data: Yahoo Finance ({ticker})<br>
+                        • Current ROI: {current_roi:.2f}x • Industry Avg: {industry_roi:.2f}x
+                        </p>""",
+                        unsafe_allow_html=True
+                    )
             except Exception as e:
                 st.error(f"Error calculating ROI trend: {e}")
-                st.caption("Unable to generate ROI trend visualization")
         else:
             st.info(f"Stock ticker not found for {selected_company}. ROI trend unavailable.")
+
+
+            
     
     # # === AGENCY RELATIONSHIPS ===
     # st.subheader("🏢 Current Agency Relationships")

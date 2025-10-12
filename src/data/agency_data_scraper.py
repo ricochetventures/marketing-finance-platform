@@ -116,12 +116,13 @@ class AgencyDataScraper:
                     return result
         
         return {
-            'agency': 'Unknown',
-            'category': category,
-            'confidence': 'None',
-            'source': 'No data found',
-            'last_updated': None
-        }
+		    'agency': 'Data Unavailable',
+		    'category': category,
+		    'confidence': 'None',
+		    'source': 'No reliable source found',
+		    'last_updated': None,
+		    'methodology': 'Searched Google News, Ad Age database, and company press releases'
+		}
     
     def _search_google_news(self, company_name: str, search_term: str) -> Dict:
         """Search Google News for agency announcements"""

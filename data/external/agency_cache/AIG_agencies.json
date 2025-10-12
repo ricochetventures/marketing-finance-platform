@@ -1,0 +1,113 @@
+{
+  "date": "2025-10-12T18:09:55.296883",
+  "data": {
+    "Creative AOR": {
+      "agency": "TBWA",
+      "confidence": "Medium",
+      "source": "Google News Search",
+      "last_updated": "2 weeks ago",
+      "method": "Web scraping - news articles",
+      "category": "Creative AOR",
+      "search_term_used": "creative agency"
+    },
+    "Media AOR": {
+      "agency": "Tool",
+      "confidence": "Medium",
+      "source": "Google News Search",
+      "last_updated": "2 weeks ago",
+      "method": "Web scraping - news articles",
+      "category": "Media AOR",
+      "search_term_used": "media agency"
+    },
+    "Digital/Interactive AOR": {
+      "agency": "Tool",
+      "confidence": "Medium",
+      "source": "Google News Search",
+      "last_updated": "2 weeks ago",
+      "method": "Web scraping - news articles",
+      "category": "Digital/Interactive AOR",
+      "search_term_used": "digital agency"
+    },
+    "PR/Communications AOR": {
+      "agency": "Tool",
+      "confidence": "Medium",
+      "source": "Google News Search",
+      "last_updated": "2 months ago",
+      "method": "Web scraping - news articles",
+      "category": "PR/Communications AOR",
+      "search_term_used": "pr agency"
+    },
+    "Social Media AOR": {
+      "agency": "Tool",
+      "confidence": "Medium",
+      "source": "Google News Search",
+      "last_updated": "2 weeks ago",
+      "method": "Web scraping - news articles",
+      "category": "Social Media AOR",
+      "search_term_used": "social media agency"
+    },
+    "Shopper/Retail Marketing AOR": {
+      "agency": "Tool",
+      "confidence": "Medium",
+      "source": "Google News Search",
+      "last_updated": "2 months ago",
+      "method": "Web scraping - news articles",
+      "category": "Shopper/Retail Marketing AOR",
+      "search_term_used": "shopper marketing"
+    },
+    "Experiential/Event Marketing AOR": {
+      "agency": "Tool",
+      "confidence": "Medium",
+      "source": "Google News Search",
+      "last_updated": "5 months ago",
+      "method": "Web scraping - news articles",
+      "category": "Experiential/Event Marketing AOR",
+      "search_term_used": "experiential agency"
+    },
+    "Content Production AOR": {
+      "agency": "Tool",
+      "confidence": "Medium",
+      "source": "Google News Search",
+      "last_updated": "2 weeks ago",
+      "method": "Web scraping - news articles",
+      "category": "Content Production AOR",
+      "search_term_used": "content production"
+    },
+    "CRM/Relationship Marketing AOR": {
+      "agency": "Ogilvy",
+      "confidence": "Medium",
+      "source": "Google News Search",
+      "last_updated": "11 months ago",
+      "method": "Web scraping - news articles",
+      "category": "CRM/Relationship Marketing AOR",
+      "search_term_used": "crm agency"
+    },
+    "Influencer Marketing AOR": {
+      "agency": "Tool",
+      "confidence": "Medium",
+      "source": "Google News Search",
+      "last_updated": "2 months ago",
+      "method": "Web scraping - news articles",
+      "category": "Influencer Marketing AOR",
+      "search_term_used": "influencer marketing agency"
+    },
+    "Performance/Growth Marketing AOR": {
+      "agency": "Tool",
+      "confidence": "Medium",
+      "source": "Google News Search",
+      "last_updated": "1 month ago",
+      "method": "Web scraping - news articles",
+      "category": "Performance/Growth Marketing AOR",
+      "search_term_used": "performance marketing"
+    },
+    "Brand Design/Branding AOR": {
+      "agency": "Tool",
+      "confidence": "Medium",
+      "source": "Google News Search",
+      "last_updated": "2 months ago",
+      "method": "Web scraping - news articles",
+      "category": "Brand Design/Branding AOR",
+      "search_term_used": "brand design agency"
+    }
+  }
+}
