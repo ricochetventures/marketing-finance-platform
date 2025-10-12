@@ -128,7 +128,7 @@ def categorize_company_with_ai(company_name: str) -> str:
 
 @st.cache_data
 def load_companies_from_json():
-    """Load companies ONLY from JSON file - no hardcoding"""
+    """Load companies ONLY from JSON file with deduplication"""
     
     json_path = Path('data/processed/companies.json')
     
@@ -145,13 +145,26 @@ def load_companies_from_json():
             st.error("companies.json is empty")
             return {}
         
-        # Build dictionary with AI categorization
+        # Build dictionary with AI categorization and deduplication
         companies_dict = {}
+        seen_normalized = set()
+        
         for company in companies_list:
             if company and isinstance(company, str):
                 clean_name = company.strip()
-                if clean_name:
-                    companies_dict[clean_name] = categorize_company_with_ai(clean_name)
+                # Normalize for comparison: replace underscores with spaces, consistent casing
+                normalized = clean_name.replace('_', ' ').replace('-', ' ').lower()
+                
+                # Skip if we've already seen this company (normalized)
+                if normalized in seen_normalized:
+                    continue
+                
+                # Use the cleaner version (prefer spaces over underscores)
+                display_name = clean_name.replace('_', '-')
+                
+                if display_name:
+                    companies_dict[display_name] = categorize_company_with_ai(display_name)
+                    seen_normalized.add(normalized)
         
         return companies_dict
         
