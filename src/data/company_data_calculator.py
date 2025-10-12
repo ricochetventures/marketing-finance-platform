@@ -8,6 +8,8 @@ import logging
 from pathlib import Path
 import json
 from src.data.web_scraper import MarketingDataScraper
+from src.data.data_source_tracker import DataSourceTracker
+from src.data.real_time_data_fetcher import RealTimeDataFetcher
 
 class CompanyDataCalculator:
     """
@@ -19,6 +21,8 @@ class CompanyDataCalculator:
         self.calculation_methods = {}
         self.last_updated = {}
         self.scraper = MarketingDataScraper()
+        self.source_tracker = DataSourceTracker()
+        self.realtime_fetcher = RealTimeDataFetcher()
         
     def get_company_metrics(self, company_name: str) -> Dict:
         """
@@ -38,14 +42,32 @@ class CompanyDataCalculator:
             
             metrics['current_price'] = current_price
             metrics['yearly_change'] = yearly_change
+            
+            # Track source
+            self.source_tracker.register_data_point(
+                'stock_price',
+                current_price,
+                'Yahoo Finance API',
+                'Real-time stock price query',
+                'Very High (99%+)',
+                {
+                    'ticker': stock_data.get('ticker'),
+                    'data_points': stock_data.get('data_points'),
+                    'period': stock_data.get('period_description'),
+                    'formula': stock_data.get('calculation_note')
+                }
+            )
+            
             metrics['calculations_used']['stock_price'] = {
                 'method': 'Latest closing price from Yahoo Finance',
                 'formula': 'yfinance.Ticker(ticker).history(period="1d")["Close"][-1]',
-                'data_source': 'Yahoo Finance API'
+                'data_source': 'Yahoo Finance API',
+                'period_description': stock_data.get('period_description', 'Unknown')
             }
+            
             metrics['calculations_used']['yearly_change'] = {
-                'method': 'Percentage change from 252 trading days ago',
-                'formula': '((current_price - price_252_days_ago) / price_252_days_ago) * 100',
+                'method': 'Percentage change from start of period',
+                'formula': '((current_price - start_price) / start_price) * 100',
                 'data_source': 'Yahoo Finance historical data'
             }
         
@@ -53,6 +75,20 @@ class CompanyDataCalculator:
         agency_data = self._get_current_agency(company_name)
         metrics['current_agency'] = agency_data['agency']
         metrics['agency_tenure_months'] = agency_data['tenure_months']
+        
+        # Track agency source
+        self.source_tracker.register_data_point(
+            'current_agency',
+            agency_data['agency'],
+            agency_data['source'],
+            agency_data['method'],
+            agency_data['confidence'],
+            {
+                'search_strategy': agency_data.get('method'),
+                'last_verified': agency_data.get('last_updated', 'Unknown')
+            }
+        )
+        
         metrics['calculations_used']['current_agency'] = {
             'method': agency_data['method'],
             'data_source': agency_data['source'],
@@ -63,22 +99,52 @@ class CompanyDataCalculator:
         roi_data = self._calculate_marketing_roi(company_name, stock_data)
         metrics['marketing_roi'] = roi_data['roi']
         metrics['roi_trend'] = roi_data['trend']
+        
+        # Track ROI source
+        self.source_tracker.register_data_point(
+            'marketing_roi',
+            roi_data['roi'],
+            ', '.join(roi_data.get('sources', ['Multiple sources'])),
+            roi_data.get('calculation_method', 'Unknown'),
+            roi_data.get('data_quality', 'Unknown'),
+            {
+                'formula': roi_data.get('formula'),
+                'assumptions': roi_data.get('assumptions', [])
+            }
+        )
+        
         metrics['calculations_used']['marketing_roi'] = {
             'method': roi_data['calculation_method'],
             'formula': roi_data['formula'],
             'data_sources': roi_data['sources'],
-            'assumptions': roi_data['assumptions']
+            'assumptions': roi_data['assumptions'],
+            'data_quality': roi_data.get('data_quality', 'Unknown')
         }
         
         # 4. MARKET SHARE CALCULATION
         market_share_data = self._calculate_market_share(company_name)
         metrics['market_share'] = market_share_data['share']
         metrics['market_position'] = market_share_data['position']
+        
+        # Track market share source
+        self.source_tracker.register_data_point(
+            'market_share',
+            market_share_data['share'],
+            market_share_data['source'],
+            market_share_data['method'],
+            market_share_data.get('data_quality', 'Medium'),
+            market_share_data.get('calculation_details', {})
+        )
+        
         metrics['calculations_used']['market_share'] = {
             'method': market_share_data['method'],
             'data_source': market_share_data['source'],
-            'industry_definition': market_share_data['industry_scope']
+            'industry_definition': market_share_data['industry_scope'],
+            'calculation_details': market_share_data.get('calculation_details', {})
         }
+        
+        # Add source tracker to metrics
+        metrics['source_tracker'] = self.source_tracker
         
         return metrics
     
@@ -392,13 +458,8 @@ class CompanyDataCalculator:
     
     def _calculate_marketing_roi(self, company_name: str, stock_data: Optional[Dict]) -> Dict:
         """
-        Calculate Marketing ROI with transparent methodology
-        
-        METHODOLOGY:
-        1. Get company financial data (revenue, earnings)
-        2. Estimate marketing spend (from earnings calls or % of revenue)
-        3. Attribute portion of revenue growth to marketing
-        4. Calculate ROI = (Marketing-Attributed Revenue - Marketing Spend) / Marketing Spend
+        Calculate Marketing ROI using REAL-TIME data - NO HARDCODING
+        Uses RealTimeDataFetcher to get actual company data
         """
         
         ticker = stock_data.get('ticker') if stock_data else None
@@ -407,76 +468,15 @@ class CompanyDataCalculator:
             return self._fallback_roi()
         
         try:
-            import yfinance as yf
-            stock = yf.Ticker(ticker)
+            # Use real-time fetcher to get company-specific ROI
+            roi_data = self.realtime_fetcher.get_company_marketing_roi(company_name, ticker)
             
-            # Get financial data
-            financials = stock.financials
-            info = stock.info
-            
-            if financials is not None and not financials.empty:
-                # Get most recent revenue
-                total_revenue = financials.loc['Total Revenue'].iloc[0] if 'Total Revenue' in financials.index else None
-                
-                if total_revenue:
-                    # STEP 1: Estimate Marketing Spend
-                    # Try to get from financials, otherwise use industry average
-                    selling_general_admin = financials.loc['Selling General Administrative'].iloc[0] if 'Selling General Administrative' in financials.index else None
-                    
-                    if selling_general_admin:
-                        # Marketing is typically 30-50% of SG&A
-                        estimated_marketing_spend = selling_general_admin * 0.40
-                        spend_source = "40% of SG&A expenses"
-                    else:
-                        # Use industry averages: CPG = 10-15%, Tech = 8-12%, etc.
-                        industry_avg_pct = self._get_industry_marketing_pct(company_name)
-                        estimated_marketing_spend = total_revenue * industry_avg_pct
-                        spend_source = f"{industry_avg_pct*100:.1f}% of revenue (industry average)"
-                    
-                    # STEP 2: Calculate Revenue Growth
-                    if len(financials.columns) > 1:
-                        prev_revenue = financials.loc['Total Revenue'].iloc[1]
-                        revenue_growth = total_revenue - prev_revenue
-                        revenue_growth_pct = (revenue_growth / prev_revenue) * 100
-                    else:
-                        revenue_growth = 0
-                        revenue_growth_pct = 0
-                    
-                    # STEP 3: Attribute Marketing Contribution
-                    # Research shows marketing drives 10-30% of revenue growth
-                    marketing_attribution = 0.20  # Conservative 20%
-                    marketing_driven_revenue = revenue_growth * marketing_attribution
-                    
-                    # STEP 4: Calculate ROI
-                    if estimated_marketing_spend > 0:
-                        marketing_roi = (marketing_driven_revenue / estimated_marketing_spend)
-                        
-                        # Ensure reasonable bounds
-                        marketing_roi = max(0.1, min(10.0, marketing_roi))
-                        
-                        return {
-                            'roi': marketing_roi,
-                            'trend': 'Positive' if revenue_growth_pct > 0 else 'Negative',
-                            'calculation_method': 'Financial statement analysis with marketing attribution',
-                            'formula': '(Marketing-Attributed Revenue Growth / Marketing Spend)',
-                            'sources': ['Yahoo Finance financials', 'Company filings'],
-                            'assumptions': [
-                                f"Total Revenue: ${total_revenue/1e9:.2f}B",
-                                f"Estimated Marketing Spend: ${estimated_marketing_spend/1e9:.2f}B ({spend_source})",
-                                f"Revenue Growth: {revenue_growth_pct:+.1f}%",
-                                f"Marketing Attribution: {marketing_attribution*100:.0f}% of growth",
-                                f"Marketing-Driven Revenue: ${marketing_driven_revenue/1e9:.2f}B"
-                            ],
-                            'data_quality': 'High - Based on actual financials'
-                        }
-            
-            # Fallback to stock-based estimation
-            return self._estimate_roi_from_stock_performance(stock_data)
+            return roi_data
             
         except Exception as e:
             logger.error(f"ROI calculation failed: {e}")
             return self._fallback_roi()
-
+        
     def _get_industry_marketing_pct(self, company_name: str) -> float:
         """Get industry-average marketing spend as % of revenue"""
         
@@ -541,71 +541,19 @@ class CompanyDataCalculator:
     
     def _calculate_market_share(self, company_name: str) -> Dict:
         """
-        Calculate market share with transparent methodology
-        
-        METHODOLOGY:
-        1. Determine company's industry/category
-        2. Get company revenue
-        3. Get total addressable market (TAM) size
-        4. Calculate: Market Share = Company Revenue / TAM × 100
+        Calculate market share using REAL-TIME scraped data - NO HARDCODING
         """
         
         try:
-            import yfinance as yf
-            
             # Get ticker
             ticker = self._get_company_ticker(company_name)
             if not ticker:
                 return self._fallback_market_share(company_name)
             
-            stock = yf.Ticker(ticker)
-            info = stock.info
-            financials = stock.financials
+            # Use real-time fetcher
+            market_share_data = self.realtime_fetcher.get_company_market_share(company_name, ticker)
             
-            # Get company revenue
-            company_revenue = info.get('totalRevenue')
-            if not company_revenue and financials is not None and not financials.empty:
-                if 'Total Revenue' in financials.index:
-                    company_revenue = financials.loc['Total Revenue'].iloc[0]
-            
-            if not company_revenue:
-                return self._fallback_market_share(company_name)
-            
-            # Determine industry and get TAM
-            industry = self._categorize_industry(company_name)
-            tam_data = self._get_total_addressable_market(industry)
-            
-            if tam_data['market_size'] > 0:
-                market_share = (company_revenue / tam_data['market_size']) * 100
-                
-                # Determine position
-                if market_share > 20:
-                    position = "Market Leader"
-                elif market_share > 10:
-                    position = "Top 3"
-                elif market_share > 5:
-                    position = "Top 5"
-                elif market_share > 2:
-                    position = "Top 10"
-                else:
-                    position = "Competitor"
-                
-                return {
-                    'share': round(market_share, 2),
-                    'position': position,
-                    'method': 'Revenue-based market share calculation',
-                    'source': 'Yahoo Finance + Industry reports',
-                    'industry_scope': f'Global {industry} market',
-                    'calculation_details': {
-                        'company_revenue': f"${company_revenue/1e9:.2f}B",
-                        'total_market_size': f"${tam_data['market_size']/1e9:.2f}B",
-                        'market_size_source': tam_data['source'],
-                        'formula': '(Company Revenue ÷ Total Market Size) × 100'
-                    },
-                    'data_quality': 'High'
-                }
-            
-            return self._fallback_market_share(company_name)
+            return market_share_data
             
         except Exception as e:
             logger.error(f"Market share calculation failed: {e}")

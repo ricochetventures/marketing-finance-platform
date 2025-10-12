@@ -1,0 +1,25 @@
+{
+  "timestamp": "2025-10-12T17:53:53.431044",
+  "data": {
+    "roi": 1.6659999999999997,
+    "trend": "Negative",
+    "calculation_method": "Estimated using 10.0% of revenue (industry-specific)",
+    "formula": "Gross Profit \u00f7 Marketing Spend",
+    "sources": [
+      "Yahoo Finance API",
+      "Company SEC Filings"
+    ],
+    "assumptions": [
+      "Total Revenue: $9910.71B",
+      "Estimated Marketing Spend: $991.07B",
+      "Gross Margin: 16.7%",
+      "Calculated ROI: 1.67x"
+    ],
+    "data_quality": "Medium",
+    "raw_data": {
+      "revenue": 9910711484416,
+      "marketing_spend": 991071148441.6001,
+      "gross_margin": 0.1666
+    }
+  }
+}

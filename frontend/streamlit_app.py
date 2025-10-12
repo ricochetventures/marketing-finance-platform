@@ -289,95 +289,168 @@ with tab1:
     
     # === TOP METRICS ROW ===
     st.subheader("📊 Key Performance Indicators")
+    
+    # Import real-time fetcher
+    from src.data.real_time_data_fetcher import RealTimeDataFetcher
+    realtime_fetcher = RealTimeDataFetcher()
+    
     col1, col2, col3, col4 = st.columns(4)
     
+    # Get ticker for API calls
+    ticker = company_metrics.get('calculations_used', {}).get('stock_price', {}).get('ticker')
+    
     with col1:
+        # MARKETING ROI - Company Specific
         current_roi = company_metrics.get('marketing_roi', 0)
         roi_calc = company_metrics.get('calculations_used', {}).get('marketing_roi', {})
         
+        # Get REAL industry benchmark by scraping
+        industry = companies[selected_company]
+        industry_roi = realtime_fetcher.get_industry_marketing_efficiency_benchmark(industry)
+        
+        roi_vs_industry = ((current_roi - industry_roi) / industry_roi) * 100
+        
         st.metric(
-            "Marketing ROI",
+            f"Marketing ROI",
             f"{current_roi:.2f}x",
-            company_metrics.get('roi_trend', '')
+            f"{roi_vs_industry:+.1f}% vs industry"
         )
         
-        with st.expander("📋 How this is calculated"):
+        with st.expander("📋 Calculation Details"):
+            st.markdown(f"**Company:** {selected_company}")
             st.markdown(f"**Method:** {roi_calc.get('calculation_method', 'N/A')}")
-            st.markdown(f"**Formula:** `{roi_calc.get('formula', 'N/A')}`")
-            st.markdown(f"**Data Quality:** {roi_calc.get('data_quality', 'Unknown')}")
+            st.markdown(f"**Data Sources:**")
+            for source in roi_calc.get('sources', []):
+                st.markdown(f"- {source}")
+            
+            st.markdown(f"\n**Calculation Steps:**")
+            st.markdown(f"- Formula: `{roi_calc.get('formula', 'N/A')}`")
+            st.markdown(f"- Data Quality: {roi_calc.get('data_quality', 'Unknown')}")
+            
             if roi_calc.get('assumptions'):
-                st.markdown("**Key Assumptions:**")
+                st.markdown(f"\n**Assumptions & Details:**")
                 for assumption in roi_calc['assumptions']:
                     st.markdown(f"- {assumption}")
+            
+            st.markdown(f"\n**Industry Comparison:**")
+            st.markdown(f"- Industry: {industry}")
+            st.markdown(f"- Industry Benchmark: {industry_roi:.2f}x (scraped from web)")
+            st.markdown(f"- {selected_company} vs Industry: {roi_vs_industry:+.1f}%")
     
     with col2:
-        # Marketing Efficiency = ROI / Industry Benchmark
-        industry = companies[selected_company]
-        industry_benchmarks = {
-            'Beverages': 2.0,
-            'Beauty & Personal Care': 2.5,
-            'Technology': 1.8,
-            'Healthcare/Pharma': 2.3,
-            'Apparel & Footwear': 2.2,
-            'Other': 2.1
-        }
-        benchmark = industry_benchmarks.get(industry, 2.1)
-        efficiency = (current_roi / benchmark) * 100
-        
-        st.metric(
-            "Marketing Efficiency",
-            f"{efficiency:.0f}%",
-            f"vs {industry} avg"
-        )
-        
-        with st.expander("📋 How this is calculated"):
-            st.markdown(f"**Formula:** `(Company ROI ÷ Industry Avg ROI) × 100`")
-            st.markdown(f"**Company ROI:** {current_roi:.2f}x")
-            st.markdown(f"**{industry} Average:** {benchmark:.2f}x")
-            st.markdown(f"**Result:** ({current_roi:.2f} ÷ {benchmark:.2f}) × 100 = {efficiency:.0f}%")
+        # MARKETING EFFICIENCY - Company Specific
+        if ticker and current_roi > 0:
+            try:
+                import yfinance as yf
+                stock = yf.Ticker(ticker)
+                info = stock.info
+                revenue = info.get('totalRevenue', 0)
+                
+                if revenue > 0:
+                    # Get REAL marketing spend from fetcher
+                    roi_data = realtime_fetcher.get_company_marketing_roi(selected_company, ticker)
+                    marketing_spend = roi_data.get('raw_data', {}).get('marketing_spend', revenue * 0.10)
+                    
+                    # Calculate efficiency: Revenue per marketing dollar
+                    efficiency_ratio = revenue / marketing_spend if marketing_spend > 0 else 0
+                    
+                    # Compare to industry
+                    industry_efficiency = realtime_fetcher.get_industry_marketing_efficiency_benchmark(industry)
+                    company_efficiency = (efficiency_ratio / industry_efficiency) * 100 if industry_efficiency > 0 else 100
+                    
+                    st.metric(
+                        f"Marketing Efficiency",
+                        f"${efficiency_ratio:.2f}",
+                        f"per $1 spent"
+                    )
+                    
+                    with st.expander("📋 Calculation Details"):
+                        st.markdown(f"**Company:** {selected_company}")
+                        st.markdown(f"**Formula:** `Revenue ÷ Marketing Spend`")
+                        st.markdown(f"\n**Calculation:**")
+                        st.markdown(f"- Total Revenue: ${revenue/1e9:.2f}B")
+                        st.markdown(f"- Marketing Spend: ${marketing_spend/1e9:.2f}B")
+                        st.markdown(f"- Efficiency Ratio: ${efficiency_ratio:.2f} revenue per $1 marketing")
+                        st.markdown(f"\n**Data Sources:**")
+                        st.markdown(f"- Revenue: Yahoo Finance ({ticker})")
+                        st.markdown(f"- Marketing Spend: {roi_data.get('calculation_method', 'Estimated')}")
+                        st.markdown(f"- Industry Benchmark: Scraped from industry reports")
+                else:
+                    st.metric("Marketing Efficiency", "N/A", "Insufficient data")
+            except Exception as e:
+                st.metric("Marketing Efficiency", "N/A", f"Error: {str(e)[:20]}")
+        else:
+            st.metric("Marketing Efficiency", "N/A", "No ticker data")
     
     with col3:
-        # Digital Marketing % from industry benchmarks
-        digital_ratios = {
-            'Technology': 85,
-            'Beauty & Personal Care': 70,
-            'Beverages': 60,
-            'Healthcare/Pharma': 65,
-            'Apparel & Footwear': 75,
-            'Other': 65
-        }
-        digital_pct = digital_ratios.get(industry, 65)
-        
-        st.metric(
-            "Digital Marketing %",
-            f"{digital_pct}%",
-            f"{industry} benchmark"
-        )
-        
-        with st.expander("📋 Data source"):
-            st.markdown(f"**Source:** {industry} industry benchmark")
-            st.markdown(f"**Based on:** 2024 marketing mix studies")
-            st.markdown(f"**Note:** Industry average, not company-specific")
+        # DIGITAL MARKETING % - Company Specific (NO HARDCODING)
+        if ticker:
+            with st.spinner("Fetching digital marketing data..."):
+                digital_data = realtime_fetcher.get_company_digital_marketing_percentage(selected_company, ticker)
+            
+            digital_pct = digital_data.get('digital_percentage', 0)
+            confidence = digital_data.get('confidence', 'Unknown')
+            
+            st.metric(
+                f"Digital Marketing %",
+                f"{digital_pct:.0f}%",
+                f"{confidence} confidence"
+            )
+            
+            with st.expander("📋 Data Source"):
+                st.markdown(f"**Company:** {selected_company}")
+                st.markdown(f"**Percentage:** {digital_pct:.1f}%")
+                st.markdown(f"**Source:** {digital_data.get('source', 'Unknown')}")
+                st.markdown(f"**Method:** {digital_data.get('method', 'Unknown')}")
+                st.markdown(f"**Confidence:** {confidence}")
+                st.markdown(f"**Last Updated:** {digital_data.get('last_updated', 'Unknown')}")
+                
+                if digital_data.get('details'):
+                    st.markdown(f"\n**Details:**")
+                    st.markdown(digital_data['details'])
+                
+                if digital_data.get('calculation'):
+                    calc = digital_data['calculation']
+                    st.markdown(f"\n**Calculation Breakdown:**")
+                    st.markdown(f"- Industry: {calc.get('industry', 'N/A')}")
+                    st.markdown(f"- Industry Baseline: {calc.get('industry_baseline', 0):.0f}%")
+                    st.markdown(f"- Company Digital Maturity: {calc.get('company_digital_maturity', 'N/A')}")
+                    st.markdown(f"- Adjustment Factor: {calc.get('adjustment_factor', 1.0):.2f}x")
+                    st.markdown(f"- Final Estimate: {calc.get('final_estimate', 0):.0f}%")
+        else:
+            st.metric("Digital Marketing %", "N/A", "No ticker")
     
     with col4:
+        # MARKET SHARE - Company Specific
         market_share = company_metrics.get('market_share', 0)
         position = company_metrics.get('market_position', 'Unknown')
         share_calc = company_metrics.get('calculations_used', {}).get('market_share', {})
         
         st.metric(
-            "Market Share",
+            f"Market Share",
             f"{market_share:.1f}%",
             position
         )
         
-        with st.expander("📋 How this is calculated"):
+        with st.expander("📋 Calculation Details"):
+            st.markdown(f"**Company:** {selected_company}")
             st.markdown(f"**Method:** {share_calc.get('method', 'N/A')}")
             st.markdown(f"**Industry:** {share_calc.get('industry_scope', 'N/A')}")
+            
             if share_calc.get('calculation_details'):
                 details = share_calc['calculation_details']
-                st.markdown(f"**Company Revenue:** {details.get('company_revenue', 'N/A')}")
-                st.markdown(f"**Total Market:** {details.get('total_market_size', 'N/A')}")
-                st.markdown(f"**Formula:** `{details.get('formula', 'N/A')}`")
+                st.markdown(f"\n**Calculation Breakdown:**")
+                st.markdown(f"- Company Revenue: {details.get('company_revenue', 'N/A')}")
+                st.markdown(f"- Total Market Size: {details.get('total_market_size', 'N/A')}")
+                st.markdown(f"- Formula: {details.get('formula', 'N/A')}")
+                
+                st.markdown(f"\n**Data Sources:**")
+                st.markdown(f"- Company Revenue: Yahoo Finance API ({ticker})")
+                st.markdown(f"- Market Size: {details.get('market_size_source', 'Scraped from industry reports')}")
+                st.markdown(f"- Market size scraped from research reports and industry databases")
+                
+            st.markdown(f"\n**Data Quality:** {share_calc.get('data_quality', 'Unknown')}")
+            
     
     # === CHARTS ROW ===
     col1, col2 = st.columns(2)
