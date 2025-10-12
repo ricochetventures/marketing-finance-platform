@@ -147,7 +147,7 @@ class CompanyDataCalculator:
 
 
     def _get_company_ticker(self, company_name: str) -> Optional[str]:
-        """AI-powered ticker lookup using multiple strategies"""
+        """Enhanced AI-powered ticker lookup using multiple strategies"""
         
         # Strategy 1: Check cache file
         cache_file = Path('data/processed/ticker_cache.json')
@@ -163,8 +163,9 @@ class CompanyDataCalculator:
             except Exception as e:
                 logging.error(f"Error reading cache: {e}")
         
-        # Strategy 2: Manual mappings (MOST RELIABLE)
+        # Strategy 2: Comprehensive manual mappings
         manual_overrides = {
+            # Original mappings
             "Coca-Cola": "KO",
             "L'Oréal": "OR.PA",
             "Nestlé": "NSRGY",
@@ -195,14 +196,164 @@ class CompanyDataCalculator:
             "Under Armour": "UAA",
             "VF Corporation": "VFC",
             "Adidas": "ADS.DE",
-            "Constellation Brands": "STZ"
+            "Constellation Brands": "STZ",
+            
+            # Add these new mappings
+            "7-Eleven": "SVNDY",  # Seven & i Holdings
+            "7_Eleven": "SVNDY",
+            "AIG": "AIG",
+            "AMD": "AMD",
+            "AT&T": "T",
+            "Accenture": "ACN",
+            "Acer": "2353.TW",
+            "Activision_Blizzard": "ATVI",
+            "Adobe": "ADBE",
+            "Albertsons": "ACI",
+            "Alibaba": "BABA",
+            "Alphabet (Google)": "GOOGL",
+            "American_Express": "AXP",
+            "Anheuser-Busch InBev": "BUD",
+            "Anheuser-Busch_InBev": "BUD",
+            "Applied_Materials": "AMAT",
+            "Asus": "2357.TW",
+            "Atlassian": "TEAM",
+            "Autodesk": "ADSK",
+            "BJ's_Wholesale": "BJ",
+            "BMW": "BMW.DE",
+            "BP": "BP",
+            "BYD": "BYDDY",
+            "Bank_of_America": "BAC",
+            "Barclays": "BCS",
+            "Best_Buy": "BBY",
+            "Booking.com": "BKNG",
+            "Budweiser": "BUD",
+            "ByteDance (TikTok)": None,  # Private
+            "Capital One": "COF",
+            "Capital_One": "COF",
+            "Caterpillar": "CAT",
+            "Charter Communications": "CHTR",
+            "Charter_Communications": "CHTR",
+            "Chevron": "CVX",
+            "Cisco": "CSCO",
+            "Comcast": "CMCSA",
+            "ConocoPhillips": "COP",
+            "Costco": "COST",
+            "Dell": "DELL",
+            "Dell_Technologies": "DELL",
+            "Deutsche_Bank": "DB",
+            "Disney": "DIS",
+            "Domino's Pizza": "DPZ",
+            "ExxonMobil": "XOM",
+            "FedEx": "FDX",
+            "Ford": "F",
+            "GE": "GE",
+            "GSK": "GSK",
+            "GameStop": "GME",
+            "Gap": "GPS",
+            "General Motors": "GM",
+            "General_Motors": "GM",
+            "Goldman_Sachs": "GS",
+            "H&M": "HM-B.ST",
+            "HPE": "HPE",
+            "HSBC": "HSBC",
+            "Heineken": "HEINY",
+            "Honda": "HMC",
+            "Hyundai/Kia": "HYMLF",
+            "IBM": "IBM",
+            "IKEA": None,  # Private
+            "Intel": "INTC",
+            "JPMorgan Chase": "JPM",
+            "J.P._Morgan": "JPM",
+            "Kellogg's": "K",
+            "Kroger": "KR",
+            "Lenovo": "LNVGY",
+            "LVMH": "LVMUY",
+            "Marlboro": "PM",  # Philip Morris
+            "Mastercard": "MA",
+            "McDonald's": "MCD",
+            "Mercedes-Benz": "MBG.DE",
+            "Mercedes_Benz": "MBG.DE",
+            "Micron": "MU",
+            "Mondelez": "MDLZ",
+            "Morgan Stanley": "MS",
+            "Morgan_Stanley": "MS",
+            "Netflix": "NFLX",
+            "Nissan": "NSANY",
+            "Oracle": "ORCL",
+            "PayPal": "PYPL",
+            "Qualcomm": "QCOM",
+            "SAP": "SAP",
+            "Salesforce": "CRM",
+            "Samsung": "SSNLF",
+            "Santander": "SAN",
+            "Shell": "SHEL",
+            "Shopify": "SHOP",
+            "Siemens": "SIEGY",
+            "Snowflake": "SNOW",
+            "Sony": "SONY",
+            "Spotify": "SPOT",
+            "Starbucks": "SBUX",
+            "T-Mobile": "TMUS",
+            "Target": "TGT",
+            "Tesla": "TSLA",
+            "The Home Depot": "HD",
+            "The_Home_Depot": "HD",
+            "Toyota": "TM",
+            "UPS": "UPS",
+            "Verizon": "VZ",
+            "Visa": "V",
+            "Vodafone": "VOD",
+            "Volkswagen": "VWAGY",
+            "Walmart": "WMT",
+            "Wells Fargo": "WFC",
+            "Xerox": "XRX",
+            "Yahoo": "YHOO",
+            "eBay": "EBAY"
         }
         
+        # Normalize company name for matching
+        normalized_name = company_name.replace("_", "-").replace(" ", "-")
+        
+        # Try exact match
         if company_name in manual_overrides:
             ticker = manual_overrides[company_name]
-            self._cache_ticker(company_name, ticker)
-            logging.info(f"Found {company_name} in manual mappings: {ticker}")
-            return ticker
+            if ticker:
+                self._cache_ticker(company_name, ticker)
+                return ticker
+        
+        # Try normalized match
+        if normalized_name in manual_overrides:
+            ticker = manual_overrides[normalized_name]
+            if ticker:
+                self._cache_ticker(company_name, ticker)
+                return ticker
+        
+        # Strategy 3: Try yfinance search
+        try:
+            search_results = yf.Ticker(company_name).info
+            if search_results.get('symbol'):
+                ticker = search_results['symbol']
+                self._cache_ticker(company_name, ticker)
+                return ticker
+        except:
+            pass
+        
+        # Strategy 4: Try common patterns
+        patterns = [
+            company_name.upper(),
+            company_name.split()[0].upper(),
+            ''.join(w[0] for w in company_name.split()).upper()[:4]
+        ]
+        
+        for pattern in patterns:
+            try:
+                stock = yf.Ticker(pattern)
+                info = stock.info
+                if info.get('regularMarketPrice') or info.get('currentPrice'):
+                    self._cache_ticker(company_name, pattern)
+                    return pattern
+            except:
+                continue
         
         logging.warning(f"Could not find ticker for {company_name}")
         return None
