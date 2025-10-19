@@ -1,0 +1,17 @@
+{
+  "timestamp": "2025-10-14T21:30:10.607781",
+  "data": {
+    "share": 489.66,
+    "position": "Market Leader",
+    "method": "Revenue-based calculation with scraped market data",
+    "source": "Yahoo Finance + Market research reports",
+    "industry_scope": "Global Grocery Stores market",
+    "calculation_details": {
+      "company_revenue": "$9910.71B",
+      "total_market_size": "$2024.00B",
+      "formula": "(Company Revenue \u00f7 Total Market Size) \u00d7 100",
+      "market_size_source": "Scraped from industry reports"
+    },
+    "data_quality": "High"
+  }
+}

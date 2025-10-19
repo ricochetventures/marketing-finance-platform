@@ -11,6 +11,8 @@ try:
 
     # Now import the calculator
     from src.data.company_data_calculator import CompanyDataCalculator
+    from src.data.enhanced_calculator import EnhancedMetricsCalculator
+
 except ImportError:
     # Fallback if import fails
     class CompanyDataCalculator:
@@ -50,6 +52,70 @@ st.set_page_config(
 # Custom CSS
 st.markdown("""
 <style>
+    /* Fixed Header */
+    .fixed-header {
+        position: fixed;
+        top: 60px;
+        left: 0;
+        right: 0;
+        height: 50px;
+        background: linear-gradient(90deg, #1e3a8a 0%, #3b82f6 100%);
+        color: white;
+        z-index: 999;
+        padding: 12px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .fixed-header h3 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+    }
+    
+    .fixed-header-info {
+        font-size: 13px;
+        color: rgba(255,255,255,0.9);
+    }
+    
+    /* Agency section styling - NO DROPDOWNS */
+    .agency-category {
+        margin: 10px 0;
+        padding: 10px;
+        border-left: 3px solid #3b82f6;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+    }
+    
+    .agency-category strong {
+        color: #1e3a8a;
+        font-size: 14px;
+        display: block;
+        margin-bottom: 4px;
+    }
+    
+    .agency-name {
+        color: #334155;
+        font-size: 15px;
+        margin: 2px 0;
+        font-weight: 500;
+    }
+    
+    .agency-source {
+        color: #64748b;
+        font-size: 11px;
+        margin-top: 4px;
+        display: block;
+    }
+    
+    /* Hide the success notification */
+    .stAlert[data-baseweb="notification"] {
+        display: none !important;
+    }
+    
+    /* Existing styles preserved */
     .metric-explanation {
         font-size: 14px;
         color: #444;
@@ -59,6 +125,7 @@ st.markdown("""
         white-space: normal !important;
         word-wrap: break-word !important;
     }
+    
     .calculation-details {
         background-color: #f8f9fa;
         padding: 15px;
@@ -67,20 +134,23 @@ st.markdown("""
         border-left: 4px solid #007acc;
         font-style: normal !important;
     }
+    
     .calculation-details p, .calculation-details li {
         font-style: normal !important;
         margin-bottom: 8px;
     }
+    
     .data-source {
         font-size: 12px;
         color: #666;
         font-style: italic;
         margin-top: 10px;
     }
-    /* Fix for expander content */
+    
     .streamlit-expanderContent {
         font-style: normal !important;
     }
+    
     .streamlit-expanderContent p {
         white-space: normal !important;
         word-wrap: break-word !important;
@@ -89,13 +159,26 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Fixed Header
+st.markdown(f"""
+<div class="fixed-header">
+    <h3>🎯 {st.session_state.get('selected_company', 'Marketing-Finance AI Platform')}</h3>
+    <div class="fixed-header-info">
+        AI-Powered Marketing Performance Intelligence
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
 # Initialize calculator
 @st.cache_resource
-def get_calculator():
-    # from company_data_calculator import CompanyDataCalculator
-    return CompanyDataCalculator()
+def get_calculators():
+    return {
+        'basic': CompanyDataCalculator(),
+        'enhanced': EnhancedMetricsCalculator()
+    }
 
-calculator = get_calculator()
+calculators = get_calculators()
+calculator = calculators['enhanced']
 
 # Initialize session state
 if 'selected_company' not in st.session_state:
@@ -266,20 +349,16 @@ with st.sidebar:
         unsafe_allow_html=True
     )
     
-    # === PRIMARY AGENCIES (Not in dropdown) ===
+    # === PRIMARY AGENCIES (NO DROPDOWNS) ===
     st.markdown("---")
     st.markdown("### Primary Agencies")
-    st.markdown(
-        "<p style='font-size: 11px; color: #666;'>Agency of Record by category</p>",
-        unsafe_allow_html=True
-    )
-    
+    st.caption("Agency of Record by category")
+
     from src.data.agency_data_scraper import AgencyDataScraper
     agency_scraper = AgencyDataScraper()
     agencies = agency_scraper.get_all_agencies(selected_company)
-    
+
     if agencies:
-        # Show top 3 categories prominently
         primary_cats = ['Creative AOR', 'Media AOR', 'Digital/Interactive AOR']
         
         for cat in primary_cats:
@@ -287,64 +366,36 @@ with st.sidebar:
                 info = agencies[cat]
                 agency_name = info['agency']
                 
-                # Clean up "Tool" if present
                 if agency_name == 'Tool':
                     agency_name = 'Data Unavailable'
                 
-                # Display category and agency
                 cat_display = cat.replace(' AOR', '')
-                st.markdown(f"**{cat_display}**")
-                st.markdown(f"{agency_name}")
-                
-                # Small grey text with methodology
                 confidence = info.get('confidence', 'Unknown')
                 last_updated = info.get('last_updated', 'Unknown')
                 
-                methodology_text = f"{confidence} confidence • Updated: {last_updated}"
-                st.markdown(
-                    f"<p style='font-size: 10px; color: #999; margin-top: -5px; margin-bottom: 10px;'>{methodology_text}</p>",
-                    unsafe_allow_html=True
-                )
-                
-                # Tooltip with full details
-                tooltip_text = f"""
-                **Source:** {info.get('source', 'Unknown')}
-                
-                **Method:** {info.get('method', 'Unknown')}
-                
-                **Search Strategy:**
-                • Searched Google News for agency announcements
-                • Queried Ad Age database
-                • Searched company press releases
-                
-                **Last Verified:** {last_updated}
-                """
-                
-                with st.expander("ℹ️ How determined", expanded=False):
-                    st.markdown(tooltip_text)
+                # Compact display with tooltip
+                st.markdown(f"""
+                <div class="agency-category">
+                    <strong>{cat_display}</strong>
+                    <div class="agency-name">{agency_name}</div>
+                    <span class="agency-source">{confidence} confidence • Updated: {last_updated}</span>
+                </div>
+                """, unsafe_allow_html=True)
         
-        # Remaining categories in compact format
+        # Other categories - even more compact
         other_cats = [cat for cat in agencies.keys() if cat not in primary_cats]
         if other_cats:
-            st.markdown("---")
             st.markdown("**Other Categories**")
             for cat in other_cats:
                 info = agencies[cat]
-                agency_name = info['agency']
-                if agency_name == 'Tool':
-                    agency_name = 'Data Unavailable'
-                
+                agency_name = info['agency'] if info['agency'] != 'Tool' else 'Data Unavailable'
                 cat_short = cat.replace(' AOR', '').replace('/', ' / ')
-                st.markdown(
-                    f"<p style='font-size: 11px; color: #666; margin-bottom: 3px;'>{cat_short}: {agency_name}</p>",
-                    unsafe_allow_html=True
-                )
+                st.caption(f"{cat_short}: {agency_name}")
     else:
         st.info("Agency data being collected...")
-        st.markdown(
-            "<p style='font-size: 10px; color: #999;'>Source: Real-time web search of industry databases and news</p>",
-            unsafe_allow_html=True
-        )
+        st.caption("Source: Real-time web search")
+
+
     
     # === MARKETING ROI (Fixed) ===
     st.markdown("---")
@@ -413,7 +464,8 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 ])
 
 with tab1:
-    st.header(f"Executive Dashboard - {selected_company}")
+    st.markdown(f"## {selected_company}")
+    st.markdown("### Key Performance Indicators")
     
     # Get FRESH metrics for the selected company
     with st.spinner(f"Loading data for {selected_company}..."):
@@ -438,6 +490,24 @@ with tab1:
     # Import real-time fetcher for additional metrics
     from src.data.real_time_data_fetcher import RealTimeDataFetcher
     realtime_fetcher = RealTimeDataFetcher()
+
+    # Get enhanced metrics
+    ticker = company_metrics.get('calculations_used', {}).get('stock_price', {}).get('ticker')
+
+    if ticker:
+        enhanced_metrics = {
+            'efficiency': calculators['enhanced'].calculate_marketing_efficiency(selected_company, ticker),
+            'digital': calculators['enhanced'].calculate_digital_marketing_percentage(selected_company, ticker),
+            'market_share': calculators['enhanced'].calculate_market_share(selected_company, ticker)
+        }
+    else:
+        enhanced_metrics = {
+            'efficiency': {'efficiency': 0, 'interpretation': 'No ticker data'},
+            'digital': {'digital_percentage': 0, 'interpretation': 'No ticker data'},
+            'market_share': {'market_share': 0, 'interpretation': 'No ticker data'}
+        }
+
+
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -479,82 +549,51 @@ with tab1:
                 st.markdown(roi_tooltip)
     
     with col2:
-        # MARKETING EFFICIENCY (Company-specific, no hardcoding)
-        if ticker and current_roi > 0:
-            try:
-                import yfinance as yf
-                stock = yf.Ticker(ticker)
-                info = stock.info
-                revenue = info.get('totalRevenue', 0)
-                
-                if revenue > 0:
-                    # Get REAL marketing spend
-                    roi_data = realtime_fetcher.get_company_marketing_roi(selected_company, ticker)
-                    marketing_spend = roi_data.get('raw_data', {}).get('marketing_spend', revenue * 0.10)
-                    
-                    # Calculate efficiency: Revenue per marketing dollar
-                    efficiency_ratio = revenue / marketing_spend if marketing_spend > 0 else 0
-                    
-                    # Generate explanation
-                    efficiency_explanation = explainer.explain_marketing_efficiency(
-                        selected_company, efficiency_ratio, revenue, marketing_spend
-                    )
-                    
-                    st.metric(
-                        f"Marketing Efficiency",
-                        f"${efficiency_ratio:.2f}",
-                        "per $1 spent"
-                    )
-                    
-                    st.markdown(
-                        f"<p style='font-size: 10px; color: #999; margin-top: -10px;'>Revenue ÷ Marketing Spend</p>",
-                        unsafe_allow_html=True
-                    )
-                    
-                    # Tooltip with full details
-                    efficiency_tooltip = explainer.format_for_tooltip(efficiency_explanation)
-                    with st.expander("ℹ️", expanded=False):
-                        st.markdown(efficiency_tooltip)
-                else:
-                    st.metric("Marketing Efficiency", "N/A", "Insufficient data")
-            except Exception as e:
-                st.metric("Marketing Efficiency", "N/A", f"Error loading")
+        # Marketing Efficiency (NEW - from enhanced calculator)
+        efficiency = enhanced_metrics['efficiency'].get('efficiency', 0)
+        
+        if efficiency > 0:
+            st.metric(
+                "Marketing Efficiency",
+                f"${efficiency:.2f}",
+                "per $1 spent"
+            )
+            st.caption("Revenue ÷ Marketing Spend")
+            
+            with st.expander("ℹ️"):
+                st.markdown(f"""**Methodology:** {enhanced_metrics['efficiency'].get('methodology', 'Unknown')}
+
+    **Sources:** {', '.join(enhanced_metrics['efficiency'].get('sources', []))}
+
+    **Interpretation:** {enhanced_metrics['efficiency'].get('interpretation', '')}
+
+    **Confidence:** {enhanced_metrics['efficiency'].get('confidence', 'Unknown')}""")
         else:
-            st.metric("Marketing Efficiency", "N/A", "No ticker data")
+            st.metric("Marketing Efficiency", "N/A", "Insufficient data")
+
     
     with col3:
-        # DIGITAL MARKETING % (NO HARDCODING)
-        if ticker:
-            with st.spinner(""):
-                digital_data = realtime_fetcher.get_company_digital_marketing_percentage(selected_company, ticker)
-            
-            digital_pct = digital_data.get('digital_percentage', 0)
-            confidence = digital_data.get('confidence', 'Unknown')
-            
-            # Generate explanation
-            digital_explanation = explainer.explain_digital_marketing_percentage(
-                selected_company, digital_pct, 
-                digital_data.get('source', 'Analysis'), 
-                digital_data.get('method', 'Estimation')
-            )
-            
+        # Digital Marketing % (NEW - from enhanced calculator)
+        digital_pct = enhanced_metrics['digital'].get('digital_percentage', 0)
+        confidence = enhanced_metrics['digital'].get('confidence', 'Unknown')
+        
+        if digital_pct > 0:
             st.metric(
-                f"Digital Marketing %",
+                "Digital Marketing %",
                 f"{digital_pct:.0f}%",
                 f"{confidence} confidence"
             )
+            industry_baseline = enhanced_metrics['digital'].get('industry_baseline', 0)
+            st.caption(f"Industry: {industry_baseline:.0f}%")
             
-            st.markdown(
-                f"<p style='font-size: 10px; color: #999; margin-top: -10px;'>{digital_data.get('source', 'Analysis')}</p>",
-                unsafe_allow_html=True
-            )
-            
-            # Full details in tooltip
-            digital_tooltip = explainer.format_for_tooltip(digital_explanation)
-            with st.expander("ℹ️", expanded=False):
-                st.markdown(digital_tooltip)
+            with st.expander("ℹ️"):
+                st.markdown(f"""**Methodology:** {enhanced_metrics['digital'].get('methodology', 'Unknown')}
+
+    **Sources:** {', '.join(enhanced_metrics['digital'].get('sources', []))}
+
+    **Interpretation:** {enhanced_metrics['digital'].get('interpretation', '')}""")
         else:
-            st.metric("Digital Marketing %", "N/A", "No ticker")
+            st.metric("Digital Marketing %", "N/A", "Insufficient data")
     
     with col4:
         # MARKET SHARE
@@ -621,26 +660,67 @@ with tab1:
                 stock_data = yf.Ticker(ticker).history(period="1y")
                 
                 if not stock_data.empty:
+                    # Enhanced Stock Chart with Marketing Attribution
                     fig = go.Figure()
+
+                    # Stock price
                     fig.add_trace(go.Scatter(
                         x=stock_data.index,
                         y=stock_data['Close'],
                         mode='lines',
                         name='Stock Price',
-                        line=dict(color='blue', width=2)
+                        line=dict(color='#3b82f6', width=2.5),
                     ))
+
+                    # Marketing attribution (20% of movement)
+                    base_price = stock_data['Close'].iloc[0]
+                    total_movement = stock_data['Close'] - base_price
+                    marketing_attributed = base_price + (total_movement * 0.20)
+
+                    fig.add_trace(go.Scatter(
+                        x=stock_data.index,
+                        y=marketing_attributed,
+                        mode='lines',
+                        name='Marketing-Attributed Value',
+                        line=dict(color='#10b981', width=2, dash='dash'),
+                    ))
+
+                    # Shaded area showing marketing impact zone
+                    fig.add_trace(go.Scatter(
+                        x=stock_data.index.tolist() + stock_data.index.tolist()[::-1],
+                        y=stock_data['Close'].tolist() + marketing_attributed.tolist()[::-1],
+                        fill='toself',
+                        fillcolor='rgba(59, 130, 246, 0.1)',
+                        line=dict(color='rgba(255,255,255,0)'),
+                        name='Marketing Impact Zone',
+                        showlegend=True
+                    ))
+
                     fig.update_layout(
-                        title=f"12-Month Stock Performance ({ticker})",
+                        title={
+                            'text': f"{selected_company} - Stock Performance with Marketing Attribution",
+                            'x': 0.5,
+                            'xanchor': 'center'
+                        },
                         xaxis_title="Date",
                         yaxis_title="Price (USD)",
-                        height=400
+                        height=450,
+                        hovermode='x unified',
+                        legend=dict(
+                            yanchor="top",
+                            y=0.99,
+                            xanchor="left",
+                            x=0.01,
+                            bgcolor='rgba(255,255,255,0.8)'
+                        )
                     )
+
                     st.plotly_chart(fig, use_container_width=True)
-                    
-                    st.markdown(
-                        f"<p style='font-size: 10px; color: #999;'>Data: Yahoo Finance ({ticker}), Real-time with 15-min delay</p>",
-                        unsafe_allow_html=True
-                    )
+
+                    st.caption(f"""**Methodology:** Marketing attribution model assumes 20% of stock price movement is attributable to marketing effectiveness. 
+                    **Data:** Yahoo Finance ({ticker}) • Real-time""")
+
+
             except Exception as e:
                 st.error(f"Error loading stock data: {str(e)}")
         else:
@@ -728,9 +808,6 @@ with tab1:
                 st.error(f"Error calculating ROI trend: {e}")
         else:
             st.info(f"Stock ticker not found for {selected_company}. ROI trend unavailable.")
-
-
-            
     
     # # === AGENCY RELATIONSHIPS ===
     # st.subheader("🏢 Current Agency Relationships")
