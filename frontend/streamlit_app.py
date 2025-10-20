@@ -349,7 +349,7 @@ with st.sidebar:
         unsafe_allow_html=True
     )
     
-    # === PRIMARY AGENCIES (NO DROPDOWNS) ===
+    # === PRIMARY AGENCIES (with tooltips) ===
     st.markdown("---")
     st.markdown("### Primary Agencies")
     st.caption("Agency of Record by category")
@@ -372,42 +372,81 @@ with st.sidebar:
                 cat_display = cat.replace(' AOR', '')
                 confidence = info.get('confidence', 'Unknown')
                 last_updated = info.get('last_updated', 'Unknown')
+                source = info.get('source', 'Unknown')
+                method = info.get('method', 'Unknown')
                 
-                # Compact display with tooltip
-                st.markdown(f"""
-                <div class="agency-category">
-                    <strong>{cat_display}</strong>
-                    <div class="agency-name">{agency_name}</div>
-                    <span class="agency-source">{confidence} confidence • Updated: {last_updated}</span>
-                </div>
-                """, unsafe_allow_html=True)
+                # Create tooltip text
+                tooltip = f"""
+                **Source:** {source}
+                
+                **Method:** {method}
+                
+                **Confidence:** {confidence}
+                
+                **Last Updated:** {last_updated}
+                """
+                
+                # Display with help parameter for tooltip
+                st.markdown(f"**{cat_display}**", help=tooltip)
+                st.markdown(f"<div style='margin-left: 10px; margin-bottom: 10px;'>{agency_name}</div>", 
+                           unsafe_allow_html=True)
         
-        # Other categories - even more compact
+        # Other categories - SAME STYLE as primary
         other_cats = [cat for cat in agencies.keys() if cat not in primary_cats]
         if other_cats:
+            st.markdown("---")
             st.markdown("**Other Categories**")
+            
             for cat in other_cats:
-                info = agencies[cat]
-                agency_name = info['agency'] if info['agency'] != 'Tool' else 'Data Unavailable'
-                cat_short = cat.replace(' AOR', '').replace('/', ' / ')
-                st.caption(f"{cat_short}: {agency_name}")
+                if cat in agencies:
+                    info = agencies[cat]
+                    agency_name = info['agency']
+                    
+                    if agency_name == 'Tool':
+                        agency_name = 'Data Unavailable'
+                    
+                    cat_display = cat.replace(' AOR', '').replace('/', ' / ')
+                    confidence = info.get('confidence', 'Unknown')
+                    last_updated = info.get('last_updated', 'Unknown')
+                    source = info.get('source', 'Unknown')
+                    method = info.get('method', 'Unknown')
+                    
+                    # Tooltip (same as primary)
+                    tooltip = f"""
+                    **Source:** {source}
+                    
+                    **Method:** {method}
+                    
+                    **Confidence:** {confidence}
+                    
+                    **Last Updated:** {last_updated}
+                    """
+                    
+                    # Same style as primary categories
+                    st.markdown(f"**{cat_display}**", help=tooltip)
+                    st.markdown(f"<div style='margin-left: 10px; margin-bottom: 10px;'>{agency_name}</div>", 
+                               unsafe_allow_html=True)
+
+            
     else:
         st.info("Agency data being collected...")
         st.caption("Source: Real-time web search")
 
-
     
-    # === MARKETING ROI (Fixed) ===
+    # === MARKETING ROI (with tooltip) ===
     st.markdown("---")
     roi = company_metrics.get('marketing_roi', 0)
     roi_explanation = company_metrics.get('explanations', {}).get('marketing_roi', {})
-    
-    st.metric("Marketing ROI", f"{roi:.2f}x")
-    
-    # Small grey text showing what this means (NOT italic, NOT overflowing)
+
+    # Create tooltip
+    roi_tooltip = explainer.format_for_tooltip(roi_explanation) if roi_explanation else "Marketing ROI calculation"
+
+    st.metric("Marketing ROI", f"{roi:.2f}x", help=roi_tooltip)
+
+    # Small grey interpretation text
     interpretation = f"${roi:.2f} return per $1 spent"
     st.markdown(
-        f"<p style='font-size: 11px; color: #666; margin-top: -10px; font-style: normal;'>{interpretation}</p>",
+        f"<p style='font-size: 11px; color: #666; margin-top: -10px;'>{interpretation}</p>",
         unsafe_allow_html=True
     )
     
@@ -464,6 +503,73 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 ])
 
 with tab1:
+
+    # === COMPANY SUMMARY (3 sentences) ===
+    st.markdown(f"## {selected_company}")
+    
+    # Get company info
+    stock_data_raw = calculator._get_stock_data(selected_company)
+    ticker = stock_data_raw.get('ticker') if stock_data_raw else None
+    
+    if ticker:
+        try:
+            import yfinance as yf
+            stock = yf.Ticker(ticker)
+            info = stock.info
+            
+            # Extract key info
+            sector = info.get('sector', 'Unknown')
+            industry = info.get('industry', 'Unknown')
+            market_cap = info.get('marketCap', 0)
+            description = info.get('longBusinessSummary', '')
+            
+            # Generate 3-sentence summary
+            summary_sentences = []
+            
+            # Sentence 1: Basic info
+            if market_cap > 0:
+                market_cap_str = f"${market_cap/1e9:.1f}B" if market_cap >= 1e9 else f"${market_cap/1e6:.0f}M"
+                summary_sentences.append(
+                    f"{selected_company} is a {sector} company operating in the {industry} industry with a market capitalization of {market_cap_str}."
+                )
+            else:
+                summary_sentences.append(
+                    f"{selected_company} operates in the {industry} industry within the {sector} sector."
+                )
+            
+            # Sentence 2: Business description (extract first sentence)
+            if description:
+                first_sentence = description.split('.')[0] + '.'
+                summary_sentences.append(first_sentence)
+            
+            # Sentence 3: Key metrics
+            current_price = company_metrics.get('current_price', 0)
+            yearly_change = company_metrics.get('yearly_change', 0)
+            current_roi = company_metrics.get('marketing_roi', 0)
+            
+            summary_sentences.append(
+                f"The company's stock is currently trading at ${current_price:.2f} ({yearly_change:+.1f}% YTD) with an estimated marketing ROI of {current_roi:.2f}x."
+            )
+            
+            # Display summary in nice box
+            st.markdown(
+                f"""
+                <div style='background-color: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #3b82f6; margin-bottom: 20px;'>
+                    <p style='margin: 0; line-height: 1.6; color: #1f2937;'>
+                        {' '.join(summary_sentences)}
+                    </p>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            
+        except:
+            st.info("Company information loading...")
+    
+    st.markdown("---")
+    
+    # Continue with rest of Executive Dashboard content...
+
     st.markdown(f"## {selected_company}")
     st.markdown("### Key Performance Indicators")
     
@@ -618,7 +724,6 @@ with tab1:
                 st.markdown(share_tooltip)
     
     # === DIMINISHING RETURNS INSIGHT (Subtle integration) ===
-    st.markdown("---")
     
     # Analyze efficiency
     from src.data.hypothesis_insights import DiminishingReturnsAnalyzer
@@ -648,166 +753,211 @@ with tab1:
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader(f"{selected_company} Stock Performance")
-        
-        # [Keep existing stock chart code]
+        st.subheader(f"📈 {selected_company} Stock Performance")
+        st.caption("12-month price trend with marketing attribution model")
+
         stock_data_raw = calculator._get_stock_data(selected_company)
         ticker = stock_data_raw.get('ticker') if stock_data_raw else None
-        
+
         if ticker:
             try:
                 import yfinance as yf
                 stock_data = yf.Ticker(ticker).history(period="1y")
                 
                 if not stock_data.empty:
-                    # Enhanced Stock Chart with Marketing Attribution
+                    # Simplified, clearer chart
                     fig = go.Figure()
 
-                    # Stock price
+                    # Main stock price line
                     fig.add_trace(go.Scatter(
                         x=stock_data.index,
                         y=stock_data['Close'],
                         mode='lines',
                         name='Stock Price',
-                        line=dict(color='#3b82f6', width=2.5),
+                        line=dict(color='#2563eb', width=3),
+                        hovertemplate='<b>%{x|%b %d, %Y}</b><br>$%{y:.2f}<extra></extra>'
                     ))
 
-                    # Marketing attribution (20% of movement)
-                    base_price = stock_data['Close'].iloc[0]
-                    total_movement = stock_data['Close'] - base_price
-                    marketing_attributed = base_price + (total_movement * 0.20)
-
-                    fig.add_trace(go.Scatter(
+                    # Add volume bar chart (secondary y-axis)
+                    fig.add_trace(go.Bar(
                         x=stock_data.index,
-                        y=marketing_attributed,
-                        mode='lines',
-                        name='Marketing-Attributed Value',
-                        line=dict(color='#10b981', width=2, dash='dash'),
+                        y=stock_data['Volume'],
+                        name='Volume',
+                        marker_color='rgba(100, 100, 100, 0.2)',
+                        yaxis='y2',
+                        hovertemplate='Volume: %{y:,.0f}<extra></extra>'
                     ))
 
-                    # Shaded area showing marketing impact zone
-                    fig.add_trace(go.Scatter(
-                        x=stock_data.index.tolist() + stock_data.index.tolist()[::-1],
-                        y=stock_data['Close'].tolist() + marketing_attributed.tolist()[::-1],
-                        fill='toself',
-                        fillcolor='rgba(59, 130, 246, 0.1)',
-                        line=dict(color='rgba(255,255,255,0)'),
-                        name='Marketing Impact Zone',
-                        showlegend=True
-                    ))
+                    # Calculate and show simple statistics
+                    current_price = stock_data['Close'].iloc[-1]
+                    year_start_price = stock_data['Close'].iloc[0]
+                    ytd_change = ((current_price - year_start_price) / year_start_price) * 100
+                    high_52w = stock_data['High'].max()
+                    low_52w = stock_data['Low'].min()
 
                     fig.update_layout(
                         title={
-                            'text': f"{selected_company} - Stock Performance with Marketing Attribution",
+                            'text': f"{selected_company} ({ticker}) - 1 Year Performance",
                             'x': 0.5,
-                            'xanchor': 'center'
+                            'xanchor': 'center',
+                            'font': {'size': 16}
                         },
                         xaxis_title="Date",
-                        yaxis_title="Price (USD)",
+                        yaxis_title="Stock Price (USD)",
+                        yaxis2=dict(
+                            title="Volume",
+                            overlaying='y',
+                            side='right',
+                            showgrid=False
+                        ),
                         height=450,
                         hovermode='x unified',
+                        showlegend=True,
                         legend=dict(
                             yanchor="top",
                             y=0.99,
                             xanchor="left",
                             x=0.01,
                             bgcolor='rgba(255,255,255,0.8)'
-                        )
+                        ),
+                        plot_bgcolor='rgba(245, 245, 245, 0.5)'
+                    )
+
+                    # Add shaded region for context
+                    fig.add_hrect(
+                        y0=low_52w, y1=high_52w,
+                        fillcolor="rgba(100, 200, 100, 0.1)",
+                        line_width=0,
+                        annotation_text="52-Week Range",
+                        annotation_position="top left"
                     )
 
                     st.plotly_chart(fig, use_container_width=True)
 
-                    st.caption(f"""**Methodology:** Marketing attribution model assumes 20% of stock price movement is attributable to marketing effectiveness. 
-                    **Data:** Yahoo Finance ({ticker}) • Real-time""")
+                    # Statistics below chart
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Current Price", f"${current_price:.2f}")
+                    with col2:
+                        st.metric("YTD Change", f"{ytd_change:+.1f}%")
+                    with col3:
+                        st.metric("52-Week High", f"${high_52w:.2f}")
+                    with col4:
+                        st.metric("52-Week Low", f"${low_52w:.2f}")
 
+                    st.caption(f"**Data Source:** Yahoo Finance • **Ticker:** {ticker} • **Updated:** {datetime.now().strftime('%Y-%m-%d')}")
 
             except Exception as e:
                 st.error(f"Error loading stock data: {str(e)}")
         else:
             st.warning(f"Stock ticker not found for {selected_company}")
+
+
     
     with col2:
-        st.subheader("Marketing ROI Trend")
-        
-        # [Keep existing ROI trend chart with updated caption]
+        st.subheader("📊 Marketing ROI Trend")
+        st.caption("Estimated ROI based on stock-attributed marketing impact")
+
         stock_data_raw = calculator._get_stock_data(selected_company)
         ticker = stock_data_raw.get('ticker') if stock_data_raw else None
-        
+
         if ticker:
             try:
                 import yfinance as yf
                 stock_data = yf.Ticker(ticker).history(period="1y")
                 
                 if not stock_data.empty and len(stock_data) > 30:
-                    returns = stock_data['Close'].pct_change(30)
-                    marketing_attribution = 0.20
-                    spend_ratio = 0.05
-                    roi_estimate = 1 + (returns * marketing_attribution / spend_ratio)
-                    roi_estimate = roi_estimate.fillna(method='ffill').clip(0.5, 5.0)
+                    # Calculate rolling ROI estimate
+                    # Methodology: Use 30-day stock returns as proxy for marketing impact
+                    returns_30d = stock_data['Close'].pct_change(30)
                     
+                    # Marketing attribution: assume 20% of stock performance is marketing-driven
+                    marketing_attribution = 0.20
+                    
+                    # Assumed marketing spend as % of revenue
+                    spend_ratio = 0.05  # 5% of revenue
+                    
+                    # Estimated ROI = 1 + (Returns × Attribution / Spend Ratio)
+                    roi_estimate = 1 + (returns_30d * marketing_attribution / spend_ratio)
+                    
+                    # Clean data: remove outliers and smooth
+                    roi_estimate = roi_estimate.fillna(method='ffill').clip(0.5, 5.0)
+                    roi_smoothed = roi_estimate.rolling(window=20, min_periods=1).mean()
+                    
+                    # Current actual ROI
                     current_roi = company_metrics.get('marketing_roi', 2.1)
                     
+                    # Get industry benchmark
+                    from src.data.real_time_data_fetcher import RealTimeDataFetcher
+                    fetcher = RealTimeDataFetcher()
+                    industry = companies.get(selected_company, 'Other')
+                    industry_roi = fetcher.get_industry_marketing_efficiency_benchmark(industry)
+                    
+                    # Create clear chart
                     fig = go.Figure()
                     
-                    fig.add_trace(go.Scatter(
-                        x=stock_data.index,
-                        y=roi_estimate,
-                        mode='lines',
-                        name='Estimated ROI Trend',
-                        line=dict(color='lightblue', width=1.5),
-                        opacity=0.6
-                    ))
-                    
-                    roi_smoothed = roi_estimate.rolling(window=20, min_periods=1).mean()
+                    # Smoothed trend line
                     fig.add_trace(go.Scatter(
                         x=stock_data.index,
                         y=roi_smoothed,
                         mode='lines',
-                        name='Smoothed Trend',
-                        line=dict(color='blue', width=2.5)
+                        name='ROI Trend (smoothed)',
+                        line=dict(color='#3b82f6', width=3)
                     ))
                     
+                    # Current ROI marker
                     fig.add_trace(go.Scatter(
                         x=[stock_data.index[-1]],
                         y=[current_roi],
                         mode='markers',
-                        name='Current ROI',
-                        marker=dict(color='green', size=12, symbol='star')
+                        name='Current Calculated ROI',
+                        marker=dict(color='#10b981', size=14, symbol='star')
                     ))
                     
+                    # Industry benchmark line
                     fig.add_hline(
                         y=industry_roi,
                         line_dash="dash",
-                        line_color="gray",
-                        annotation_text=f"{industry} Industry Avg: {industry_roi:.2f}x",
+                        line_color="rgba(200, 100, 100, 0.7)",
+                        annotation_text=f"Industry Avg: {industry_roi:.2f}x",
                         annotation_position="right"
                     )
                     
                     fig.update_layout(
-                        title=f"Marketing ROI Trend - {selected_company}",
+                        title="Marketing ROI Trend - Estimated from Stock Performance",
                         xaxis_title="Date",
-                        yaxis_title="ROI Multiple",
+                        yaxis_title="ROI Multiple (Revenue ÷ Marketing Spend)",
                         height=400,
                         showlegend=True,
-                        hovermode='x unified'
+                        hovermode='x unified',
+                        yaxis=dict(range=[0, max(5, roi_smoothed.max() * 1.1)])
                     )
                     
                     st.plotly_chart(fig, use_container_width=True)
                     
-                    # Updated methodology caption (not hardcoded explanation)
+                    # Methodology explanation
                     st.markdown(
-                        f"""<p style='font-size: 10px; color: #999;'>
-                        <b>Methodology:</b> Estimated from stock performance attribution model<br>
-                        • 20% of stock movement attributed to marketing<br>
-                        • Data: Yahoo Finance ({ticker})<br>
-                        • Current ROI: {current_roi:.2f}x • Industry Avg: {industry_roi:.2f}x
-                        </p>""",
+                        f"""
+                        <p style='font-size: 11px; color: #666;'>
+                        <b>Methodology:</b> ROI estimated using stock attribution model<br>
+                        • Assumes {marketing_attribution*100:.0f}% of 30-day stock returns attributable to marketing<br>
+                        • Assumes marketing spend = {spend_ratio*100:.0f}% of revenue<br>
+                        • Formula: 1 + (Stock Return × {marketing_attribution} ÷ {spend_ratio})<br>
+                        • <b>Current ROI:</b> {current_roi:.2f}x | <b>Industry Avg:</b> {industry_roi:.2f}x<br>
+                        • <b>Source:</b> Yahoo Finance ({ticker})
+                        </p>
+                        """,
                         unsafe_allow_html=True
                     )
             except Exception as e:
                 st.error(f"Error calculating ROI trend: {e}")
         else:
             st.info(f"Stock ticker not found for {selected_company}. ROI trend unavailable.")
+
+
+
+
+
     
     # # === AGENCY RELATIONSHIPS ===
     # st.subheader("🏢 Current Agency Relationships")
